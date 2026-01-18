@@ -442,25 +442,23 @@ export class Vim9Tokenizer
   enddef
 endclass
 
-# Node structure
-export class Node
-  var type: number
-  var body: list<any> = []
-  var line: string = ''
-  var pos: number = 0
-  var len: number = -1
-  var name: string = ''
-  var params: list<any> = []
-  var rtype: string = ''
-  var value: any = null
-  var left: any = null
-  var right: any = null
-  var op: string = ''
-  
-  def new(type: number)
-    this.type = type
-  enddef
-endclass
+# Node structure - dict based factory function to avoid Vim9script class limitations
+export def NewNode(type: number): dict<any>
+  return {
+    type: type,
+    body: [],
+    line: '',
+    pos: 0,
+    len: -1,
+    name: '',
+    params: [],
+    rtype: '',
+    value: null,
+    left: null,
+    right: null,
+    op: '',
+  }
+enddef
 
 # Operator precedence table (higher number = higher precedence)
 const OPERATOR_PRECEDENCE = {
@@ -482,13 +480,13 @@ export class Vim9Parser
   def new()
     enddef
   
-  def Parse(reader: StringReader): Node
+  def Parse(reader: StringReader): dict<any>
     this.reader = reader
     this.tokenizer = Vim9Tokenizer.new(reader)
     this.Advance()  # Load first token
     this.Advance()  # Load second token
     
-    var toplevel = Node.new(NODE_TOPLEVEL)
+    var toplevel = NewNode(NODE_TOPLEVEL)
     
     while this.current_token.type != TOKEN_EOF
       if this.current_token.type == TOKEN_KEYWORD
@@ -532,8 +530,8 @@ export class Vim9Parser
     return tok
   enddef
   
-  def ParseVar(): Node
-    var node = Node.new(NODE_VAR)
+  def ParseVar(): dict<any>
+    var node = NewNode(NODE_VAR)
     var start_pos = this.current_token
     
     this.Expect(TOKEN_KEYWORD)  # var
@@ -556,8 +554,8 @@ export class Vim9Parser
     return node
   enddef
   
-  def ParseConst(): Node
-    var node = Node.new(NODE_CONST)
+  def ParseConst(): dict<any>
+    var node = NewNode(NODE_CONST)
     
     this.Expect(TOKEN_KEYWORD)  # const
     
@@ -579,8 +577,8 @@ export class Vim9Parser
     return node
   enddef
   
-  def ParseDef(): Node
-    var node = Node.new(NODE_DEF)
+  def ParseDef(): dict<any>
+    var node = NewNode(NODE_DEF)
     
     this.Expect(TOKEN_KEYWORD)  # def
     
@@ -611,8 +609,8 @@ export class Vim9Parser
     return node
   enddef
   
-  def ParseClass(): Node
-    var node = Node.new(NODE_CLASS)
+  def ParseClass(): dict<any>
+    var node = NewNode(NODE_CLASS)
     
     this.Expect(TOKEN_KEYWORD)  # class
     
@@ -639,8 +637,8 @@ export class Vim9Parser
     return node
   enddef
   
-  def ParseImport(): Node
-    var node = Node.new(NODE_IMPORT)
+  def ParseImport(): dict<any>
+    var node = NewNode(NODE_IMPORT)
     
     this.Expect(TOKEN_KEYWORD)  # import
     
@@ -661,8 +659,8 @@ export class Vim9Parser
     return node
   enddef
   
-  def ParseExport(): Node
-    var node = Node.new(NODE_EXPORT)
+  def ParseExport(): dict<any>
+    var node = NewNode(NODE_EXPORT)
     
     this.Expect(TOKEN_KEYWORD)  # export
     
@@ -679,8 +677,8 @@ export class Vim9Parser
     return node
   enddef
   
-  def ParseStatement(): Node
-    var node = Node.new(NODE_EXCMD)
+  def ParseStatement(): dict<any>
+    var node = NewNode(NODE_EXCMD)
     
     # Skip to next meaningful token
     if this.current_token.type != TOKEN_EOF
@@ -739,18 +737,18 @@ export class Vim9Parser
     return type_str
   enddef
   
-  def ParseExpression(): Node
+  def ParseExpression(): dict<any>
     return this.ParseLogicalOr()
   enddef
   
-  def ParseLogicalOr(): Node
+  def ParseLogicalOr(): dict<any>
     var left = this.ParseLogicalAnd()
     
     while this.current_token.type == TOKEN_OR
       var op = this.current_token.value
       this.Advance()
       var right = this.ParseLogicalAnd()
-      var node = Node.new(NODE_OR)
+      var node = NewNode(NODE_OR)
       node.op = op
       node.left = left
       node.right = right
@@ -760,14 +758,14 @@ export class Vim9Parser
     return left
   enddef
   
-  def ParseLogicalAnd(): Node
+  def ParseLogicalAnd(): dict<any>
     var left = this.ParseComparison()
     
     while this.current_token.type == TOKEN_AND
       var op = this.current_token.value
       this.Advance()
       var right = this.ParseComparison()
-      var node = Node.new(NODE_AND)
+      var node = NewNode(NODE_AND)
       node.op = op
       node.left = left
       node.right = right
@@ -777,7 +775,7 @@ export class Vim9Parser
     return left
   enddef
   
-  def ParseComparison(): Node
+  def ParseComparison(): dict<any>
     var left = this.ParseAdditive()
     
     while this.current_token.type == TOKEN_EQEQ ||
@@ -790,7 +788,7 @@ export class Vim9Parser
       var tok_type = this.current_token.type
       this.Advance()
       var right = this.ParseAdditive()
-      var node = Node.new(NODE_EQUAL)
+      var node = NewNode(NODE_EQUAL)
       if tok_type == TOKEN_NEQ
         node.type = NODE_NEQUAL
       elseif tok_type == TOKEN_LT
@@ -811,7 +809,7 @@ export class Vim9Parser
     return left
   enddef
   
-  def ParseAdditive(): Node
+  def ParseAdditive(): dict<any>
     var left = this.ParseMultiplicative()
     
     while this.current_token.type == TOKEN_PLUS ||
@@ -820,7 +818,7 @@ export class Vim9Parser
       var tok_type = this.current_token.type
       this.Advance()
       var right = this.ParseMultiplicative()
-      var node = Node.new(tok_type == TOKEN_PLUS ? NODE_ADD : NODE_SUBTRACT)
+      var node = NewNode(tok_type == TOKEN_PLUS ? NODE_ADD : NODE_SUBTRACT)
       node.op = op
       node.left = left
       node.right = right
@@ -830,7 +828,7 @@ export class Vim9Parser
     return left
   enddef
   
-  def ParseMultiplicative(): Node
+  def ParseMultiplicative(): dict<any>
     var left = this.ParseUnary()
     
     while this.current_token.type == TOKEN_STAR ||
@@ -846,7 +844,7 @@ export class Vim9Parser
       elseif tok_type == TOKEN_PERCENT
         node_type = NODE_MODULO
       endif
-      var node = Node.new(node_type)
+      var node = NewNode(node_type)
       node.op = op
       node.left = left
       node.right = right
@@ -856,17 +854,17 @@ export class Vim9Parser
     return left
   enddef
   
-  def ParseUnary(): Node
+  def ParseUnary(): dict<any>
     if this.current_token.type == TOKEN_NOT
       this.Advance()
       var operand = this.ParseUnary()
-      var node = Node.new(NODE_NOT)
+      var node = NewNode(NODE_NOT)
       node.left = operand
       return node
     elseif this.current_token.type == TOKEN_MINUS
       this.Advance()
       var operand = this.ParseUnary()
-      var node = Node.new(NODE_SUBTRACT)
+      var node = NewNode(NODE_SUBTRACT)
       node.left = operand
       return node
     endif
@@ -874,7 +872,7 @@ export class Vim9Parser
     return this.ParsePostfix()
   enddef
   
-  def ParsePostfix(): Node
+  def ParsePostfix(): dict<any>
     var left = this.ParsePrimary()
     
     while true
@@ -886,7 +884,7 @@ export class Vim9Parser
         endif
         var field = this.current_token.value
         this.Advance()
-        var node = Node.new(NODE_DOT)
+        var node = NewNode(NODE_DOT)
         node.left = left
         node.name = field
         left = node
@@ -895,14 +893,14 @@ export class Vim9Parser
         this.Advance()
         var index = this.ParseExpression()
         this.Expect(TOKEN_SQCLOSE)
-        var node = Node.new(NODE_SUBSCRIPT)
+        var node = NewNode(NODE_SUBSCRIPT)
         node.left = left
         node.right = index
         left = node
       elseif this.current_token.type == TOKEN_POPEN
         # Function call: func(args)
         this.Advance()
-        var args: list<Node> = []
+        var args: list<dict<any>> = []
         
         while this.current_token.type != TOKEN_PCLOSE && this.current_token.type != TOKEN_EOF
           args->add(this.ParseExpression())
@@ -914,7 +912,7 @@ export class Vim9Parser
         endwhile
         
         this.Expect(TOKEN_PCLOSE)
-        var node = Node.new(NODE_CALL)
+        var node = NewNode(NODE_CALL)
         node.left = left
         node.body = args
         left = node
@@ -926,32 +924,32 @@ export class Vim9Parser
     return left
   enddef
   
-  def ParsePrimary(): Node
+  def ParsePrimary(): dict<any>
     if this.current_token.type == TOKEN_NUMBER
-      var node = Node.new(NODE_NUMBER)
+      var node = NewNode(NODE_NUMBER)
       node.value = this.current_token.value
       this.Advance()
       return node
     elseif this.current_token.type == TOKEN_STRING
-      var node = Node.new(NODE_STRING)
+      var node = NewNode(NODE_STRING)
       node.value = this.current_token.value
       this.Advance()
       return node
     elseif this.current_token.type == TOKEN_IDENTIFIER
-      var node = Node.new(NODE_IDENTIFIER)
+      var node = NewNode(NODE_IDENTIFIER)
       node.name = this.current_token.value
       this.Advance()
       return node
     elseif this.current_token.value == 'true'
-      var node = Node.new(NODE_TRUE)
+      var node = NewNode(NODE_TRUE)
       this.Advance()
       return node
     elseif this.current_token.value == 'false'
-      var node = Node.new(NODE_FALSE)
+      var node = NewNode(NODE_FALSE)
       this.Advance()
       return node
     elseif this.current_token.value == 'null'
-      var node = Node.new(NODE_NULL)
+      var node = NewNode(NODE_NULL)
       this.Advance()
       return node
     elseif this.current_token.type == TOKEN_POPEN
@@ -963,7 +961,7 @@ export class Vim9Parser
     elseif this.current_token.type == TOKEN_SQOPEN
       # Array literal: [1, 2, 3]
       this.Advance()
-      var elements: list<Node> = []
+      var elements: list<dict<any>> = []
       
       while this.current_token.type != TOKEN_SQCLOSE && this.current_token.type != TOKEN_EOF
         elements->add(this.ParseExpression())
@@ -975,7 +973,7 @@ export class Vim9Parser
       endwhile
       
       this.Expect(TOKEN_SQCLOSE)
-      var node = Node.new(NODE_LIST)
+      var node = NewNode(NODE_LIST)
       node.body = elements
       return node
     elseif this.current_token.type == TOKEN_COPEN
@@ -998,7 +996,7 @@ export class Vim9Parser
       endwhile
       
       this.Expect(TOKEN_CCLOSE)
-      var node = Node.new(NODE_DICT)
+      var node = NewNode(NODE_DICT)
       node.body = pairs
       return node
     else
@@ -1012,13 +1010,13 @@ export class Compiler
   def new()
     enddef
   
-  def Compile(node: Node): list<string>
+  def Compile(node: dict<any>): list<string>
     var result: list<string> = []
     this.CompileNode(node, 0, result)
     return result
   enddef
   
-  def CompileNode(node: Node, depth: number, result: list<string>): void
+  def CompileNode(node: dict<any>, depth: number, result: list<string>): void
     var indent = repeat('  ', depth)
     
     if node.type == NODE_TOPLEVEL
