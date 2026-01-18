@@ -7,10 +7,60 @@ vim9script
 def import(): dict<any>
   return {
     StringReader: StringReader,
+    Vim9Tokenizer: Vim9Tokenizer,
     Vim9Parser: Vim9Parser,
     Compiler: Compiler,
   }
 enddef
+
+# Token type constants
+const TOKEN_EOF = 0
+const TOKEN_EOL = 1
+const TOKEN_SPACE = 2
+const TOKEN_NUMBER = 3
+const TOKEN_STRING = 4
+const TOKEN_IDENTIFIER = 5
+const TOKEN_KEYWORD = 6
+const TOKEN_COLON = 7
+const TOKEN_COMMA = 8
+const TOKEN_SEMICOLON = 9
+const TOKEN_POPEN = 10
+const TOKEN_PCLOSE = 11
+const TOKEN_SQOPEN = 12
+const TOKEN_SQCLOSE = 13
+const TOKEN_COPEN = 14
+const TOKEN_CCLOSE = 15
+const TOKEN_DOT = 16
+const TOKEN_ARROW = 17
+const TOKEN_PLUS = 18
+const TOKEN_MINUS = 19
+const TOKEN_STAR = 20
+const TOKEN_SLASH = 21
+const TOKEN_PERCENT = 22
+const TOKEN_EQ = 23
+const TOKEN_EQEQ = 24
+const TOKEN_NEQ = 25
+const TOKEN_LT = 26
+const TOKEN_LTEQ = 27
+const TOKEN_GT = 28
+const TOKEN_GTEQ = 29
+const TOKEN_AND = 30
+const TOKEN_OR = 31
+const TOKEN_NOT = 32
+const TOKEN_QUESTION = 33
+const TOKEN_AMPERSAND = 34
+const TOKEN_DOTDOTDOT = 35
+const TOKEN_AT = 36
+const TOKEN_SHARP = 37
+
+# Vim9 keywords
+const KEYWORDS = [
+  'def', 'enddef', 'class', 'endclass', 'var', 'const', 'final',
+  'static', 'private', 'protected', 'public', 'extends', 'implements',
+  'enum', 'endenum', 'import', 'export', 'if', 'else', 'elseif', 'endif',
+  'for', 'endfor', 'while', 'endwhile', 'try', 'catch', 'finally', 'endtry',
+  'return', 'throw', 'break', 'continue', 'true', 'false', 'null', 'any',
+]
 
 # Node type constants
 const NODE_TOPLEVEL = 1
@@ -102,43 +152,285 @@ enddef
 # StringReader class
 class StringReader
   var lines: list<string>
-  var pos: number = 0
-  var lnum: number = 1
+  var line: number = 0
   var col: number = 0
+  var current_line: string = ''
   
   def new(lines: list<string>): StringReader
     this.lines = lines
+    this.line = 0
+    this.col = 0
+    if len(lines) > 0
+      this.current_line = lines[0]
+    endif
     return this
   enddef
   
   def peek(offset: number = 0): string
-    var pos = this.pos + offset
-    if pos < len(this.lines)
-      return this.lines[pos]
+    var col = this.col + offset
+    if col < len(this.current_line)
+      return this.current_line[col : col]
     endif
-    return ''
+    return '<EOL>'
   enddef
   
-  def read(): string
-    if this.pos < len(this.lines)
-      var line = this.lines[this.pos]
-      this.pos += 1
-      this.lnum += 1
-      return line
+  def peekn(n: number): string
+    var end = this.col + n
+    if end <= len(this.current_line)
+      return this.current_line[this.col : end - 1]
     endif
-    return ''
+    return this.current_line[this.col : ]
+  enddef
+  
+  def advance(n: number = 1): void
+    this.col += n
+  enddef
+  
+  def next_line(): bool
+    if this.line < len(this.lines) - 1
+      this.line += 1
+      this.col = 0
+      this.current_line = this.lines[this.line]
+      return true
+    endif
+    return false
   enddef
   
   def iseof(): bool
-    return this.pos >= len(this.lines)
+    return this.line >= len(this.lines)
   enddef
   
-  def getpos(): dict<number>
+  def getpos(): dict<any>
     return {
-      pos: this.pos,
-      lnum: this.lnum,
+      line: this.line,
       col: this.col,
     }
+  enddef
+  
+  def skip_whitespace(): void
+    while !this.iseof() && this.peek() =~ '[ \t]'
+      this.advance()
+    endwhile
+  enddef
+endclass
+
+class Vim9Tokenizer
+  var reader: StringReader
+  var current_token: dict<any> = {}
+  
+  def new(reader: StringReader): Vim9Tokenizer
+    this.reader = reader
+    return this
+  enddef
+  
+  def token(type: number, value: string, line: number, col: number): dict<any>
+    return {
+      type: type,
+      value: value,
+      line: line,
+      col: col,
+    }
+  enddef
+  
+  def peek(): dict<any>
+    var saved_line = this.reader.line
+    var saved_col = this.reader.col
+    var saved_current = this.reader.current_line
+    
+    var tok = this.get()
+    
+    this.reader.line = saved_line
+    this.reader.col = saved_col
+    this.reader.current_line = saved_current
+    
+    return tok
+  enddef
+  
+  def get(): dict<any>
+    this.reader.skip_whitespace()
+    
+    if this.reader.iseof()
+      return this.token(TOKEN_EOF, '<EOF>', this.reader.line, this.reader.col)
+    endif
+    
+    var line = this.reader.line
+    var col = this.reader.col
+    var c = this.reader.peek()
+    
+    # Numbers
+    if c =~ '[0-9]'
+      return this.read_number()
+    endif
+    
+    # Strings
+    if c == '"'
+      return this.read_string('"')
+    endif
+    
+    if c == "'"
+      return this.read_string("'")
+    endif
+    
+    # Identifiers and keywords
+    if c =~ '[A-Za-z_]'
+      return this.read_identifier()
+    endif
+    
+    # Multi-character operators
+    var cc = this.reader.peekn(2)
+    if cc == '=>'
+      this.reader.advance(2)
+      return this.token(TOKEN_ARROW, '=>', line, col)
+    elseif cc == '=='
+      this.reader.advance(2)
+      return this.token(TOKEN_EQEQ, '==', line, col)
+    elseif cc == '!='
+      this.reader.advance(2)
+      return this.token(TOKEN_NEQ, '!=', line, col)
+    elseif cc == '<='
+      this.reader.advance(2)
+      return this.token(TOKEN_LTEQ, '<=', line, col)
+    elseif cc == '>='
+      this.reader.advance(2)
+      return this.token(TOKEN_GTEQ, '>=', line, col)
+    elseif cc == '&&'
+      this.reader.advance(2)
+      return this.token(TOKEN_AND, '&&', line, col)
+    elseif cc == '||'
+      this.reader.advance(2)
+      return this.token(TOKEN_OR, '||', line, col)
+    elseif cc == '..'
+      this.reader.advance(2)
+      if this.reader.peek() == '.'
+        this.reader.advance(1)
+        return this.token(TOKEN_DOTDOTDOT, '...', line, col)
+      endif
+      return this.token(TOKEN_DOT, '..', line, col)
+    endif
+    
+    # Single-character tokens
+    this.reader.advance(1)
+    if c == ':'
+      return this.token(TOKEN_COLON, ':', line, col)
+    elseif c == ','
+      return this.token(TOKEN_COMMA, ',', line, col)
+    elseif c == ';'
+      return this.token(TOKEN_SEMICOLON, ';', line, col)
+    elseif c == '('
+      return this.token(TOKEN_POPEN, '(', line, col)
+    elseif c == ')'
+      return this.token(TOKEN_PCLOSE, ')', line, col)
+    elseif c == '['
+      return this.token(TOKEN_SQOPEN, '[', line, col)
+    elseif c == ']'
+      return this.token(TOKEN_SQCLOSE, ']', line, col)
+    elseif c == '{'
+      return this.token(TOKEN_COPEN, '{', line, col)
+    elseif c == '}'
+      return this.token(TOKEN_CCLOSE, '}', line, col)
+    elseif c == '.'
+      return this.token(TOKEN_DOT, '.', line, col)
+    elseif c == '+'
+      return this.token(TOKEN_PLUS, '+', line, col)
+    elseif c == '-'
+      return this.token(TOKEN_MINUS, '-', line, col)
+    elseif c == '*'
+      return this.token(TOKEN_STAR, '*', line, col)
+    elseif c == '/'
+      return this.token(TOKEN_SLASH, '/', line, col)
+    elseif c == '%'
+      return this.token(TOKEN_PERCENT, '%', line, col)
+    elseif c == '='
+      return this.token(TOKEN_EQ, '=', line, col)
+    elseif c == '<'
+      return this.token(TOKEN_LT, '<', line, col)
+    elseif c == '>'
+      return this.token(TOKEN_GT, '>', line, col)
+    elseif c == '!'
+      return this.token(TOKEN_NOT, '!', line, col)
+    elseif c == '?'
+      return this.token(TOKEN_QUESTION, '?', line, col)
+    elseif c == '&'
+      return this.token(TOKEN_AMPERSAND, '&', line, col)
+    elseif c == '@'
+      return this.token(TOKEN_AT, '@', line, col)
+    elseif c == '#'
+      return this.token(TOKEN_SHARP, '#', line, col)
+    endif
+    
+    # Unknown character
+    return this.token(TOKEN_IDENTIFIER, c, line, col)
+  enddef
+  
+  def read_number(): dict<any>
+    var line = this.reader.line
+    var col = this.reader.col
+    var value = ''
+    
+    # Read digits
+    while !this.reader.iseof() && this.reader.peek() =~ '[0-9]'
+      value ..= this.reader.peek()
+      this.reader.advance(1)
+    endwhile
+    
+    # Read decimal part
+    if this.reader.peek() == '.' && this.reader.peekn(2)[1 : 1] =~ '[0-9]'
+      value ..= '.'
+      this.reader.advance(1)
+      while !this.reader.iseof() && this.reader.peek() =~ '[0-9]'
+        value ..= this.reader.peek()
+        this.reader.advance(1)
+      endwhile
+    endif
+    
+    return this.token(TOKEN_NUMBER, value, line, col)
+  enddef
+  
+  def read_string(quote: string): dict<any>
+    var line = this.reader.line
+    var col = this.reader.col
+    var value = ''
+    
+    this.reader.advance(1)  # Skip opening quote
+    
+    while !this.reader.iseof()
+      var c = this.reader.peek()
+      if c == quote
+        this.reader.advance(1)
+        break
+      elseif c == '\'
+        value ..= c
+        this.reader.advance(1)
+        if !this.reader.iseof()
+          value ..= this.reader.peek()
+          this.reader.advance(1)
+        endif
+      else
+        value ..= c
+        this.reader.advance(1)
+      endif
+    endwhile
+    
+    return this.token(TOKEN_STRING, value, line, col)
+  enddef
+  
+  def read_identifier(): dict<any>
+    var line = this.reader.line
+    var col = this.reader.col
+    var value = ''
+    
+    while !this.reader.iseof() && this.reader.peek() =~ '[A-Za-z0-9_]'
+      value ..= this.reader.peek()
+      this.reader.advance(1)
+    endwhile
+    
+    # Check if it's a keyword
+    var token_type = TOKEN_IDENTIFIER
+    if index(KEYWORDS, value) >= 0
+      token_type = TOKEN_KEYWORD
+    endif
+    
+    return this.token(token_type, value, line, col)
   enddef
 endclass
 
