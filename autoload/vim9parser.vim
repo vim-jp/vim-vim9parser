@@ -454,8 +454,9 @@ endclass
 # Vim9Parser class
 class Vim9Parser
   var reader: StringReader
-  var current_line: string = ''
-  var indent_level: number = 0
+  var tokenizer: Vim9Tokenizer
+  var current_token: dict<any> = {}
+  var next_token: dict<any> = {}
   
   def new(): Vim9Parser
     return this
@@ -463,112 +464,273 @@ class Vim9Parser
   
   def parse(reader: StringReader): Node
     this.reader = reader
+    this.tokenizer = Vim9Tokenizer.new(reader)
+    this.advance()  # Load first token
+    this.advance()  # Load second token
+    
     var toplevel = Node.new(NODE_TOPLEVEL)
     
-    while !this.reader.iseof()
-      var line = this.reader.peek()
-      var trimmed = line->trim()
-      
-      # Skip empty lines and comments
-      if empty(trimmed) || trimmed[0] == '#'
-        this.reader.read()
-        continue
-      endif
-      
-      # Parse vim9script specific statements
-      if trimmed =~ '^vim9script'
-        this.reader.read()
-        continue
-      elseif trimmed =~ '^var\s'
-        toplevel.body->add(this.parseVar())
-      elseif trimmed =~ '^const\s'
-        toplevel.body->add(this.parseConst())
-      elseif trimmed =~ '^def\s'
-        toplevel.body->add(this.parseDef())
-      elseif trimmed =~ '^class\s'
-        toplevel.body->add(this.parseClass())
-      elseif trimmed =~ '^import\s'
-        toplevel.body->add(this.parseImport())
-      elseif trimmed =~ '^export\s'
-        toplevel.body->add(this.parseExport())
+    while this.current_token.type != TOKEN_EOF
+      if this.current_token.type == TOKEN_KEYWORD
+        if this.current_token.value == 'vim9script'
+          this.advance()
+          continue
+        elseif this.current_token.value == 'var'
+          toplevel.body->add(this.parseVar())
+        elseif this.current_token.value == 'const'
+          toplevel.body->add(this.parseConst())
+        elseif this.current_token.value == 'def'
+          toplevel.body->add(this.parseDef())
+        elseif this.current_token.value == 'class'
+          toplevel.body->add(this.parseClass())
+        elseif this.current_token.value == 'import'
+          toplevel.body->add(this.parseImport())
+        elseif this.current_token.value == 'export'
+          toplevel.body->add(this.parseExport())
+        else
+          this.advance()
+        endif
       else
-        toplevel.body->add(this.parseExcmd())
+        this.advance()
       endif
     endwhile
     
     return toplevel
   enddef
   
+  def advance(): void
+    this.current_token = this.next_token
+    this.next_token = this.tokenizer.get()
+  enddef
+  
+  def expect(type: number): dict<any>
+    if this.current_token.type != type
+      throw $'Expected token type {type}, got {this.current_token.type}'
+    endif
+    var tok = this.current_token
+    this.advance()
+    return tok
+  enddef
+  
   def parseVar(): Node
     var node = Node.new(NODE_VAR)
-    node.line = this.reader.read()
-    # TODO: Parse variable name, type annotation, initial value
+    var start_pos = this.current_token
+    
+    this.expect(TOKEN_KEYWORD)  # var
+    
+    var name_tok = this.expect(TOKEN_IDENTIFIER)
+    node.name = name_tok.value
+    
+    # Optional type annotation
+    if this.current_token.type == TOKEN_COLON
+      this.advance()
+      node.rtype = this.parseType()
+    endif
+    
+    # Optional initialization
+    if this.current_token.type == TOKEN_EQ
+      this.advance()
+      node.body->add(this.parseExpression())
+    endif
+    
     return node
   enddef
   
   def parseConst(): Node
     var node = Node.new(NODE_CONST)
-    node.line = this.reader.read()
-    # TODO: Parse const name, type annotation, initial value
+    
+    this.expect(TOKEN_KEYWORD)  # const
+    
+    var name_tok = this.expect(TOKEN_IDENTIFIER)
+    node.name = name_tok.value
+    
+    # Optional type annotation
+    if this.current_token.type == TOKEN_COLON
+      this.advance()
+      node.rtype = this.parseType()
+    endif
+    
+    # Initialization (required for const)
+    if this.current_token.type == TOKEN_EQ
+      this.advance()
+      node.body->add(this.parseExpression())
+    endif
+    
     return node
   enddef
   
   def parseDef(): Node
     var node = Node.new(NODE_DEF)
-    var startline = this.reader.read()
-    node.line = startline
     
-    # TODO: Parse function signature (name, params with types, return type)
+    this.expect(TOKEN_KEYWORD)  # def
     
-    while !this.reader.iseof()
-      var line = this.reader.peek()
-      if line =~ '^\s*enddef\s*$'
-        this.reader.read()
-        break
+    var name_tok = this.expect(TOKEN_IDENTIFIER)
+    node.name = name_tok.value
+    
+    # Parse parameters
+    this.expect(TOKEN_POPEN)
+    node.params = this.parseParameterList()
+    this.expect(TOKEN_PCLOSE)
+    
+    # Parse return type
+    if this.current_token.type == TOKEN_COLON
+      this.advance()
+      node.rtype = this.parseType()
+    endif
+    
+    # Parse body
+    while this.current_token.type != TOKEN_KEYWORD || this.current_token.value != 'enddef'
+      if this.current_token.type == TOKEN_EOF
+        throw 'Unexpected EOF in def body'
       endif
-      node.body->add(this.reader.read())
+      node.body->add(this.parseStatement())
     endwhile
+    
+    this.expect(TOKEN_KEYWORD)  # enddef
     
     return node
   enddef
   
   def parseClass(): Node
     var node = Node.new(NODE_CLASS)
-    var startline = this.reader.read()
-    node.line = startline
     
-    # TODO: Parse class name, extends, implements, members, methods
+    this.expect(TOKEN_KEYWORD)  # class
     
-    while !this.reader.iseof()
-      var line = this.reader.peek()
-      if line =~ '^\s*endclass\s*$'
-        this.reader.read()
-        break
+    var name_tok = this.expect(TOKEN_IDENTIFIER)
+    node.name = name_tok.value
+    
+    # Parse body (members and methods)
+    while this.current_token.type != TOKEN_KEYWORD || this.current_token.value != 'endclass'
+      if this.current_token.type == TOKEN_EOF
+        throw 'Unexpected EOF in class body'
       endif
-      node.body->add(this.reader.read())
+      
+      if this.current_token.value == 'var' || this.current_token.value == 'const'
+        node.body->add(this.parseVar())
+      elseif this.current_token.value == 'def'
+        node.body->add(this.parseDef())
+      else
+        this.advance()
+      endif
     endwhile
+    
+    this.expect(TOKEN_KEYWORD)  # endclass
     
     return node
   enddef
   
   def parseImport(): Node
     var node = Node.new(NODE_IMPORT)
-    node.line = this.reader.read()
-    # TODO: Parse import path and item names
+    
+    this.expect(TOKEN_KEYWORD)  # import
+    
+    # import autoload "module.vim" as m
+    if this.current_token.value == 'autoload'
+      this.advance()
+    endif
+    
+    var path_tok = this.expect(TOKEN_STRING)
+    node.line = path_tok.value
+    
+    if this.current_token.value == 'as'
+      this.advance()
+      var alias_tok = this.expect(TOKEN_IDENTIFIER)
+      node.name = alias_tok.value
+    endif
+    
     return node
   enddef
   
   def parseExport(): Node
     var node = Node.new(NODE_EXPORT)
-    node.line = this.reader.read()
-    # TODO: Parse export target (def, class, const, var)
+    
+    this.expect(TOKEN_KEYWORD)  # export
+    
+    if this.current_token.value == 'def'
+      node.body->add(this.parseDef())
+    elseif this.current_token.value == 'const'
+      node.body->add(this.parseConst())
+    elseif this.current_token.value == 'var'
+      node.body->add(this.parseVar())
+    elseif this.current_token.value == 'class'
+      node.body->add(this.parseClass())
+    endif
+    
     return node
   enddef
   
-  def parseExcmd(): Node
+  def parseStatement(): Node
     var node = Node.new(NODE_EXCMD)
-    node.line = this.reader.read()
+    
+    # Skip to next meaningful token
+    if this.current_token.type != TOKEN_EOF
+      this.advance()
+    endif
+    
     return node
+  enddef
+  
+  def parseParameterList(): list<dict<string, any>>
+    var params: list<dict<string, any>> = []
+    
+    while this.current_token.type == TOKEN_IDENTIFIER
+      var param: dict<string, any> = {}
+      
+      param.name = this.expect(TOKEN_IDENTIFIER).value
+      
+      if this.current_token.type == TOKEN_COLON
+        this.advance()
+        param.type = this.parseType()
+      endif
+      
+      params->add(param)
+      
+      if this.current_token.type == TOKEN_COMMA
+        this.advance()
+      else
+        break
+      endif
+    endwhile
+    
+    return params
+  enddef
+  
+  def parseType(): string
+    var type_str = ''
+    
+    if this.current_token.type != TOKEN_IDENTIFIER && this.current_token.type != TOKEN_KEYWORD
+      throw $'Expected type, got {this.current_token.value}'
+    endif
+    
+    type_str = this.current_token.value
+    this.advance()
+    
+    # Handle generic types: list<string>, dict<number>, etc.
+    if this.current_token.type == TOKEN_LT
+      this.advance()
+      type_str ..= '<'
+      type_str ..= this.parseType()
+      if this.current_token.type == TOKEN_GT
+        this.advance()
+        type_str ..= '>'
+      endif
+    endif
+    
+    return type_str
+  enddef
+  
+  def parseExpression(): Node
+    # Simple expression parsing - just consume tokens until we hit a keyword or EOL
+    var expr_node = Node.new(NODE_EXCMD)
+    
+    while this.current_token.type != TOKEN_EOF &&
+          this.current_token.type != TOKEN_KEYWORD &&
+          this.current_token.type != TOKEN_SEMICOLON
+      expr_node.line ..= this.current_token.value .. ' '
+      this.advance()
+    endwhile
+    
+    return expr_node
   enddef
 endclass
 
