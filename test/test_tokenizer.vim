@@ -129,8 +129,10 @@ try
   Test_tokenize_operators()
   Test_tokenize_string()
   echomsg 'All tokenizer tests passed!'
+  sleep 100m
 catch
-  echoerr v:exception
+  echoerr 'Test failed: ' .. v:exception
+  sleep 100m
 finally
   quit!
 endtry
