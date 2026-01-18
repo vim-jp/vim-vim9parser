@@ -1,5 +1,5 @@
 .PHONY: test
-test: test-tokenizer test-parser test-ast
+test: test-tokenizer test-parser test-expr test-ast
 
 .PHONY: test-tokenizer
 test-tokenizer:
@@ -8,6 +8,10 @@ test-tokenizer:
 .PHONY: test-parser
 test-parser:
 	vim -u NONE -N -S test/test_parser.vim -c qa!
+
+.PHONY: test-expr
+test-expr:
+	vim -u NONE -N -S test/test_expr.vim -c qa!
 
 .PHONY: test-ast
 test-ast:

@@ -121,6 +121,25 @@ const NODE_ENUM = 211
 const NODE_ENDENUM = 212
 const NODE_TYPE = 213
 
+# Expression node types
+const NODE_ADD = 300
+const NODE_SUBTRACT = 301
+const NODE_MULTIPLY = 302
+const NODE_DIVIDE = 303
+const NODE_MODULO = 304
+const NODE_NUMBER = 305
+const NODE_STRING = 306
+const NODE_IDENTIFIER = 307
+const NODE_TRUE = 308
+const NODE_FALSE = 309
+const NODE_NULL = 310
+const NODE_LIST = 311
+const NODE_DICT = 312
+const NODE_CALL = 313
+const NODE_DOT = 314
+const NODE_SUBSCRIPT = 315
+const NODE_NOT = 316
+
 def test(input: any): void
   try
     var lines: list<string>
@@ -168,10 +187,21 @@ class StringReader
   
   def peek(offset: number = 0): string
     var col = this.col + offset
-    if col < len(this.current_line)
-      return this.current_line[col : col]
+    
+    # Handle advance to next line if offset goes beyond current line
+    var current_col = this.col
+    var current_line_str = this.current_line
+    
+    if col < len(current_line_str)
+      return current_line_str[col : col]
     endif
-    return '<EOL>'
+    
+    # At or past end of current line
+    if this.line < len(this.lines) - 1
+      return this.lines[this.line + 1][0 : 0]
+    endif
+    
+    return '<EOF>'
   enddef
   
   def peekn(n: number): string
@@ -184,6 +214,13 @@ class StringReader
   
   def advance(n: number = 1): void
     this.col += n
+    
+    # Automatically move to next line if we've reached the end
+    while this.col >= len(this.current_line) && this.line < len(this.lines) - 1
+      this.line += 1
+      this.col = 0
+      this.current_line = this.lines[this.line]
+    endwhile
   enddef
   
   def next_line(): bool
@@ -197,7 +234,13 @@ class StringReader
   enddef
   
   def iseof(): bool
-    return this.line >= len(this.lines)
+    if this.line >= len(this.lines)
+      return true
+    endif
+    if this.line == len(this.lines) - 1 && this.col >= len(this.current_line)
+      return true
+    endif
+    return false
   enddef
   
   def getpos(): dict<any>
@@ -208,8 +251,12 @@ class StringReader
   enddef
   
   def skip_whitespace(): void
-    while !this.iseof() && this.peek() =~ '[ \t]'
+    var iterations = 0
+    var max_iterations = 10000
+    
+    while !this.iseof() && this.peek() =~ '[ \t]' && iterations < max_iterations
       this.advance()
+      iterations += 1
     endwhile
   enddef
 endclass
@@ -444,12 +491,26 @@ class Node
   var name: string = ''
   var params: list<dict<string, any>> = []
   var rtype: string = ''
+  var value: any = null
+  var left: Node = null
+  var right: Node = null
+  var op: string = ''
   
   def new(type: number): Node
     this.type = type
     return this
   enddef
 endclass
+
+# Operator precedence table (higher number = higher precedence)
+const OPERATOR_PRECEDENCE = {
+  '||': 1,
+  '&&': 2,
+  '==': 3, '!=': 3, '<': 3, '>': 3, '<=': 3, '>=': 3,
+  '+': 4, '-': 4,
+  '*': 5, '/': 5, '%': 5,
+  '!': 6,  # unary
+}
 
 # Vim9Parser class
 class Vim9Parser
@@ -720,17 +781,270 @@ class Vim9Parser
   enddef
   
   def parseExpression(): Node
-    # Simple expression parsing - just consume tokens until we hit a keyword or EOL
-    var expr_node = Node.new(NODE_EXCMD)
+    return this.parseLogicalOr()
+  enddef
+  
+  def parseLogicalOr(): Node
+    var left = this.parseLogicalAnd()
     
-    while this.current_token.type != TOKEN_EOF &&
-          this.current_token.type != TOKEN_KEYWORD &&
-          this.current_token.type != TOKEN_SEMICOLON
-      expr_node.line ..= this.current_token.value .. ' '
+    while this.current_token.type == TOKEN_OR
+      var op = this.current_token.value
       this.advance()
+      var right = this.parseLogicalAnd()
+      var node = Node.new(NODE_OR)
+      node.op = op
+      node.left = left
+      node.right = right
+      left = node
     endwhile
     
-    return expr_node
+    return left
+  enddef
+  
+  def parseLogicalAnd(): Node
+    var left = this.parseComparison()
+    
+    while this.current_token.type == TOKEN_AND
+      var op = this.current_token.value
+      this.advance()
+      var right = this.parseComparison()
+      var node = Node.new(NODE_AND)
+      node.op = op
+      node.left = left
+      node.right = right
+      left = node
+    endwhile
+    
+    return left
+  enddef
+  
+  def parseComparison(): Node
+    var left = this.parseAdditive()
+    
+    while this.current_token.type == TOKEN_EQEQ ||
+          this.current_token.type == TOKEN_NEQ ||
+          this.current_token.type == TOKEN_LT ||
+          this.current_token.type == TOKEN_GT ||
+          this.current_token.type == TOKEN_LTEQ ||
+          this.current_token.type == TOKEN_GTEQ
+      var op = this.current_token.value
+      var tok_type = this.current_token.type
+      this.advance()
+      var right = this.parseAdditive()
+      var node = Node.new(NODE_EQUAL)
+      if tok_type == TOKEN_NEQ
+        node.type = NODE_NEQUAL
+      elseif tok_type == TOKEN_LT
+        node.type = NODE_SMALLER
+      elseif tok_type == TOKEN_GT
+        node.type = NODE_GREATER
+      elseif tok_type == TOKEN_LTEQ
+        node.type = NODE_SEQUAL
+      elseif tok_type == TOKEN_GTEQ
+        node.type = NODE_GEQUAL
+      endif
+      node.op = op
+      node.left = left
+      node.right = right
+      left = node
+    endwhile
+    
+    return left
+  enddef
+  
+  def parseAdditive(): Node
+    var left = this.parseMultiplicative()
+    
+    while this.current_token.type == TOKEN_PLUS ||
+          this.current_token.type == TOKEN_MINUS
+      var op = this.current_token.value
+      var tok_type = this.current_token.type
+      this.advance()
+      var right = this.parseMultiplicative()
+      var node = Node.new(tok_type == TOKEN_PLUS ? NODE_ADD : NODE_SUBTRACT)
+      node.op = op
+      node.left = left
+      node.right = right
+      left = node
+    endwhile
+    
+    return left
+  enddef
+  
+  def parseMultiplicative(): Node
+    var left = this.parseUnary()
+    
+    while this.current_token.type == TOKEN_STAR ||
+          this.current_token.type == TOKEN_SLASH ||
+          this.current_token.type == TOKEN_PERCENT
+      var op = this.current_token.value
+      var tok_type = this.current_token.type
+      this.advance()
+      var right = this.parseUnary()
+      var node_type = NODE_MULTIPLY
+      if tok_type == TOKEN_SLASH
+        node_type = NODE_DIVIDE
+      elseif tok_type == TOKEN_PERCENT
+        node_type = NODE_MODULO
+      endif
+      var node = Node.new(node_type)
+      node.op = op
+      node.left = left
+      node.right = right
+      left = node
+    endwhile
+    
+    return left
+  enddef
+  
+  def parseUnary(): Node
+    if this.current_token.type == TOKEN_NOT
+      this.advance()
+      var operand = this.parseUnary()
+      var node = Node.new(NODE_NOT)
+      node.left = operand
+      return node
+    elseif this.current_token.type == TOKEN_MINUS
+      this.advance()
+      var operand = this.parseUnary()
+      var node = Node.new(NODE_SUBTRACT)
+      node.left = operand
+      return node
+    endif
+    
+    return this.parsePostfix()
+  enddef
+  
+  def parsePostfix(): Node
+    var left = this.parsePrimary()
+    
+    while true
+      if this.current_token.type == TOKEN_DOT
+        # Member access: obj.field
+        this.advance()
+        if this.current_token.type != TOKEN_IDENTIFIER
+          throw $'Expected identifier after ., got {this.current_token.value}'
+        endif
+        var field = this.current_token.value
+        this.advance()
+        var node = Node.new(NODE_DOT)
+        node.left = left
+        node.name = field
+        left = node
+      elseif this.current_token.type == TOKEN_SQOPEN
+        # Array access: arr[index]
+        this.advance()
+        var index = this.parseExpression()
+        this.expect(TOKEN_SQCLOSE)
+        var node = Node.new(NODE_SUBSCRIPT)
+        node.left = left
+        node.right = index
+        left = node
+      elseif this.current_token.type == TOKEN_POPEN
+        # Function call: func(args)
+        this.advance()
+        var args: list<Node> = []
+        
+        while this.current_token.type != TOKEN_PCLOSE && this.current_token.type != TOKEN_EOF
+          args->add(this.parseExpression())
+          if this.current_token.type == TOKEN_COMMA
+            this.advance()
+          else
+            break
+          endif
+        endwhile
+        
+        this.expect(TOKEN_PCLOSE)
+        var node = Node.new(NODE_CALL)
+        node.left = left
+        node.body = args
+        left = node
+      else
+        break
+      endif
+    endwhile
+    
+    return left
+  enddef
+  
+  def parsePrimary(): Node
+    if this.current_token.type == TOKEN_NUMBER
+      var node = Node.new(NODE_NUMBER)
+      node.value = this.current_token.value
+      this.advance()
+      return node
+    elseif this.current_token.type == TOKEN_STRING
+      var node = Node.new(NODE_STRING)
+      node.value = this.current_token.value
+      this.advance()
+      return node
+    elseif this.current_token.type == TOKEN_IDENTIFIER
+      var node = Node.new(NODE_IDENTIFIER)
+      node.name = this.current_token.value
+      this.advance()
+      return node
+    elseif this.current_token.value == 'true'
+      var node = Node.new(NODE_TRUE)
+      this.advance()
+      return node
+    elseif this.current_token.value == 'false'
+      var node = Node.new(NODE_FALSE)
+      this.advance()
+      return node
+    elseif this.current_token.value == 'null'
+      var node = Node.new(NODE_NULL)
+      this.advance()
+      return node
+    elseif this.current_token.type == TOKEN_POPEN
+      # Parenthesized expression
+      this.advance()
+      var expr = this.parseExpression()
+      this.expect(TOKEN_PCLOSE)
+      return expr
+    elseif this.current_token.type == TOKEN_SQOPEN
+      # Array literal: [1, 2, 3]
+      this.advance()
+      var elements: list<Node> = []
+      
+      while this.current_token.type != TOKEN_SQCLOSE && this.current_token.type != TOKEN_EOF
+        elements->add(this.parseExpression())
+        if this.current_token.type == TOKEN_COMMA
+          this.advance()
+        else
+          break
+        endif
+      endwhile
+      
+      this.expect(TOKEN_SQCLOSE)
+      var node = Node.new(NODE_LIST)
+      node.body = elements
+      return node
+    elseif this.current_token.type == TOKEN_COPEN
+      # Dict literal: {key: value}
+      this.advance()
+      var pairs: list<dict<string, Node>> = []
+      
+      while this.current_token.type != TOKEN_CCLOSE && this.current_token.type != TOKEN_EOF
+        var key = this.current_token.value
+        this.advance()
+        this.expect(TOKEN_COLON)
+        var value = this.parseExpression()
+        pairs->add({key: key, value: value})
+        
+        if this.current_token.type == TOKEN_COMMA
+          this.advance()
+        else
+          break
+        endif
+      endwhile
+      
+      this.expect(TOKEN_CCLOSE)
+      var node = Node.new(NODE_DICT)
+      node.body = pairs
+      return node
+    else
+      throw $'Unexpected token in expression: {this.current_token.value}'
+    endif
   enddef
 endclass
 
