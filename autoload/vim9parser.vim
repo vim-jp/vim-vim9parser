@@ -131,34 +131,6 @@ const NODE_DOT = 314
 const NODE_SUBSCRIPT = 315
 const NODE_NOT = 316
 
-def Test(input: any): void
-  try
-    var lines: list<string>
-    if type(input) == v:t_string
-      if filereadable(input)
-        lines = readfile(input)
-      else
-        lines = split(input, "\n")
-      endif
-    else
-      lines = input
-    endif
-    
-    var reader = StringReader.new(lines)
-    var parser = Vim9Parser.new()
-    var compiler = Compiler.new()
-    var ast = parser.Parse(reader)
-    
-    for line in compiler.Compile(ast)
-      echo line
-    endfor
-  catch
-    echohl Error
-    echomsg 'vim9parser error: ' .. v:exception
-    echohl None
-  endtry
-enddef
-
 # StringReader class
 export class StringReader
   var lines: list<string>
@@ -481,13 +453,13 @@ export class Node
   var params: list<any> = []
   var rtype: string = ''
   var value: any = null
-  var left: Node = null
-  var right: Node = null
+  var left: any = null
+  var right: any = null
   var op: string = ''
   
   def new(type: number)
     this.type = type
-    enddef
+  enddef
 endclass
 
 # Operator precedence table (higher number = higher precedence)
