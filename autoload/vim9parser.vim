@@ -49,7 +49,7 @@ const KEYWORDS = [
   'def', 'enddef', 'class', 'endclass', 'var', 'const', 'final',
   'static', 'private', 'protected', 'public', 'extends', 'implements',
   'enum', 'endenum', 'import', 'export', 'if', 'else', 'elseif', 'endif',
-  'for', 'endfor', 'while', 'endwhile', 'try', 'catch', 'finally', 'endtry',
+  'for', 'endfor', 'while', 'endwhile', 'in', 'try', 'catch', 'finally', 'endtry',
   'return', 'throw', 'break', 'continue', 'true', 'false', 'null', 'any',
 ]
 
@@ -489,31 +489,54 @@ export class Vim9Parser
     var toplevel = NewNode(NODE_TOPLEVEL)
     
     while this.current_token.type != TOKEN_EOF
-      if this.current_token.type == TOKEN_KEYWORD
-        if this.current_token.value == 'vim9script'
-          this.Advance()
-          continue
-        elseif this.current_token.value == 'var'
-          toplevel.body->add(this.ParseVar())
-        elseif this.current_token.value == 'const'
-          toplevel.body->add(this.ParseConst())
-        elseif this.current_token.value == 'def'
-          toplevel.body->add(this.ParseDef())
-        elseif this.current_token.value == 'class'
-          toplevel.body->add(this.ParseClass())
-        elseif this.current_token.value == 'import'
-          toplevel.body->add(this.ParseImport())
-        elseif this.current_token.value == 'export'
-          toplevel.body->add(this.ParseExport())
-        else
-          this.Advance()
-        endif
-      else
+      if this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'vim9script'
         this.Advance()
+        continue
+      endif
+      
+      # Parse top-level statements
+      var stmt = this.ParseTopLevelStatement()
+      if len(stmt) > 0  # Check if dict is not empty
+        toplevel.body->add(stmt)
       endif
     endwhile
     
     return toplevel
+  enddef
+  
+  def ParseTopLevelStatement(): dict<any>
+    # Only certain keywords are allowed at top level
+    if this.current_token.type != TOKEN_KEYWORD
+      # Skip non-keyword tokens
+      this.Advance()
+      return {}
+    endif
+    
+    if this.current_token.value == 'var'
+      return this.ParseVar()
+    elseif this.current_token.value == 'const'
+      return this.ParseConst()
+    elseif this.current_token.value == 'def'
+      return this.ParseDef()
+    elseif this.current_token.value == 'class'
+      return this.ParseClass()
+    elseif this.current_token.value == 'import'
+      return this.ParseImport()
+    elseif this.current_token.value == 'export'
+      return this.ParseExport()
+    elseif this.current_token.value == 'if'
+      return this.ParseIf()
+    elseif this.current_token.value == 'while'
+      return this.ParseWhile()
+    elseif this.current_token.value == 'for'
+      return this.ParseFor()
+    elseif this.current_token.value == 'return'
+      return this.ParseReturn()
+    else
+      # Skip unknown keywords at top level
+      this.Advance()
+      return {}
+    endif
   enddef
   
   def Advance(): void
@@ -597,7 +620,7 @@ export class Vim9Parser
     endif
     
     # Parse body
-    while this.current_token.type != TOKEN_KEYWORD || this.current_token.value != 'enddef'
+    while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'enddef'
       if this.current_token.type == TOKEN_EOF
         throw 'Unexpected EOF in def body'
       endif
@@ -618,7 +641,7 @@ export class Vim9Parser
     node.name = name_tok.value
     
     # Parse body (members and methods)
-    while this.current_token.type != TOKEN_KEYWORD || this.current_token.value != 'endclass'
+    while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endclass'
       if this.current_token.type == TOKEN_EOF
         throw 'Unexpected EOF in class body'
       endif
@@ -678,11 +701,177 @@ export class Vim9Parser
   enddef
   
   def ParseStatement(): dict<any>
-    var node = NewNode(NODE_EXCMD)
+    # Check for control statements and declarations
+    if this.current_token.type == TOKEN_KEYWORD
+      if this.current_token.value == 'var'
+        return this.ParseVar()
+      elseif this.current_token.value == 'const'
+        return this.ParseConst()
+      elseif this.current_token.value == 'if'
+        return this.ParseIf()
+      elseif this.current_token.value == 'while'
+        return this.ParseWhile()
+      elseif this.current_token.value == 'for'
+        return this.ParseFor()
+      elseif this.current_token.value == 'return'
+        return this.ParseReturn()
+      elseif this.current_token.value == 'break'
+        this.Advance()
+        return NewNode(NODE_BREAK)
+      elseif this.current_token.value == 'continue'
+        this.Advance()
+        return NewNode(NODE_CONTINUE)
+      elseif this.current_token.value == 'echo'
+        var echo_node = NewNode(NODE_ECHO)
+        this.Advance()
+        # Parse echo arguments
+        while this.current_token.type != TOKEN_KEYWORD && this.current_token.type != TOKEN_EOF
+          echo_node.body->add(this.ParseExpression())
+          if this.current_token.type == TOKEN_COMMA
+            this.Advance()
+          else
+            break
+          endif
+        endwhile
+        return echo_node
+      endif
+    endif
     
-    # Skip to next meaningful token
-    if this.current_token.type != TOKEN_EOF
+    # Parse expression statement (may include assignment)
+    var expr = this.ParseExpression()
+    
+    # Check for assignment
+    if this.current_token.type == TOKEN_EQ
       this.Advance()
+      var value = this.ParseExpression()
+      var assign_node = NewNode(NODE_LET)
+      assign_node.left = expr
+      assign_node.right = value
+      return assign_node
+    endif
+    
+    return expr
+  enddef
+  
+  def ParseIf(): dict<any>
+    var node = NewNode(NODE_IF)
+    this.Expect(TOKEN_KEYWORD)  # 'if'
+    
+    # Parse condition
+    var condition = this.ParseExpression()
+    node.body = [condition]
+    
+    # Parse if body
+    var if_body: list<dict<any>> = []
+    while this.current_token.type != TOKEN_KEYWORD || 
+          (this.current_token.value != 'else' && 
+           this.current_token.value != 'elseif' && 
+           this.current_token.value != 'endif')
+      if this.current_token.type == TOKEN_EOF
+        throw 'Unexpected EOF in if statement'
+      endif
+      if_body->add(this.ParseStatement())
+    endwhile
+    node.body->add(if_body)
+    
+    # Parse else/elseif/endif
+    while this.current_token.type == TOKEN_KEYWORD && 
+          (this.current_token.value == 'elseif' || this.current_token.value == 'else')
+      if this.current_token.value == 'elseif'
+        this.Advance()
+        var elseif_cond = this.ParseExpression()
+        var elseif_node = NewNode(NODE_ELSEIF)
+        elseif_node.body = [elseif_cond]
+        
+        var elseif_body: list<dict<any>> = []
+        while this.current_token.type != TOKEN_KEYWORD || 
+              (this.current_token.value != 'else' && 
+               this.current_token.value != 'elseif' && 
+               this.current_token.value != 'endif')
+          elseif_body->add(this.ParseStatement())
+        endwhile
+        elseif_node.body->add(elseif_body)
+        node.body->add(elseif_node)
+      elseif this.current_token.value == 'else'
+        this.Advance()
+        var else_node = NewNode(NODE_ELSE)
+        var else_body: list<dict<any>> = []
+        while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endif'
+          else_body->add(this.ParseStatement())
+        endwhile
+        else_node.body = else_body
+        node.body->add(else_node)
+        break
+      endif
+    endwhile
+    
+    this.Expect(TOKEN_KEYWORD)  # 'endif'
+    return node
+  enddef
+  
+  def ParseWhile(): dict<any>
+    var node = NewNode(NODE_WHILE)
+    this.Expect(TOKEN_KEYWORD)  # 'while'
+    
+    # Parse condition
+    var condition = this.ParseExpression()
+    node.body = [condition]
+    
+    # Parse body
+    var body: list<dict<any>> = []
+    while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endwhile'
+      if this.current_token.type == TOKEN_EOF
+        throw 'Unexpected EOF in while statement'
+      endif
+      body->add(this.ParseStatement())
+    endwhile
+    node.body->add(body)
+    
+    this.Expect(TOKEN_KEYWORD)  # 'endwhile'
+    return node
+  enddef
+  
+  def ParseFor(): dict<any>
+    var node = NewNode(NODE_FOR)
+    this.Expect(TOKEN_KEYWORD)  # 'for'
+    
+    # Parse variable
+    var var_name = this.Expect(TOKEN_IDENTIFIER).value
+    node.name = var_name
+    
+    # Expect 'in'
+    if this.current_token.type != TOKEN_KEYWORD || this.current_token.value != 'in'
+      throw 'Expected "in" in for loop'
+    endif
+    this.Advance()
+    
+    # Parse iterable expression
+    var iterable = this.ParseExpression()
+    node.body = [iterable]
+    
+    # Parse body
+    var body: list<dict<any>> = []
+    while this.current_token.type != TOKEN_KEYWORD ||
+          (this.current_token.type == TOKEN_KEYWORD && this.current_token.value != 'endfor')
+      if this.current_token.type == TOKEN_EOF
+        throw 'Unexpected EOF in for statement'
+      endif
+      body->add(this.ParseStatement())
+    endwhile
+    node.body->add(body)
+    
+    this.Expect(TOKEN_KEYWORD)  # 'endfor'
+    return node
+  enddef
+  
+  def ParseReturn(): dict<any>
+    var node = NewNode(NODE_RETURN)
+    this.Expect(TOKEN_KEYWORD)  # 'return'
+    
+    # Return value is optional
+    if this.current_token.type != TOKEN_KEYWORD
+      var return_val = this.ParseExpression()
+      node.body = [return_val]
     endif
     
     return node
