@@ -49,7 +49,7 @@ const KEYWORDS = [
   'def', 'enddef', 'class', 'endclass', 'var', 'const', 'final',
   'static', 'private', 'protected', 'public', 'extends', 'implements',
   'enum', 'endenum', 'import', 'export', 'if', 'else', 'elseif', 'endif',
-  'for', 'endfor', 'while', 'endwhile', 'in', 'try', 'catch', 'finally', 'endtry',
+  'for', 'endfor', 'while', 'endwhile', 'in', 'try', 'catch', 'finally', 'endtry', 'as',
   'return', 'throw', 'break', 'continue', 'true', 'false', 'null', 'any',
 ]
 
@@ -536,6 +536,8 @@ export class Vim9Parser
       return this.ParseFor()
     elseif this.current_token.value == 'return'
       return this.ParseReturn()
+    elseif this.current_token.value == 'try'
+      return this.ParseTry()
     else
       # Skip unknown keywords at top level
       this.Advance()
@@ -738,6 +740,13 @@ export class Vim9Parser
           endif
         endwhile
         return echo_node
+      elseif this.current_token.value == 'try'
+        return this.ParseTry()
+      elseif this.current_token.value == 'throw'
+        var throw_node = NewNode(NODE_THROW)
+        this.Advance()
+        throw_node.body->add(this.ParseExpression())
+        return throw_node
       endif
     endif
     
@@ -880,6 +889,66 @@ export class Vim9Parser
       node.body = [return_val]
     endif
     
+    return node
+  enddef
+  
+  def ParseTry(): dict<any>
+    var node = NewNode(NODE_TRY)
+    this.Expect(TOKEN_KEYWORD)  # 'try'
+    
+    # Parse try body
+    var try_body: list<dict<any>> = []
+    while !(this.current_token.type == TOKEN_KEYWORD && 
+            (this.current_token.value == 'catch' || this.current_token.value == 'finally' || this.current_token.value == 'endtry'))
+      if this.current_token.type == TOKEN_EOF
+        throw 'Unexpected EOF in try statement'
+      endif
+      try_body->add(this.ParseStatement())
+    endwhile
+    node.body = [try_body]
+    
+    # Parse catch blocks
+    while this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'catch'
+      this.Advance()
+      var catch_node = NewNode(NODE_CATCH)
+      
+      # Parse exception variable (optional)
+      if this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'as'
+        this.Advance()
+        var exc_var = this.Expect(TOKEN_IDENTIFIER)
+        catch_node.name = exc_var.value
+      endif
+      
+      # Parse catch body
+      var catch_body: list<dict<any>> = []
+      while !(this.current_token.type == TOKEN_KEYWORD && 
+              (this.current_token.value == 'catch' || this.current_token.value == 'finally' || this.current_token.value == 'endtry'))
+        if this.current_token.type == TOKEN_EOF
+          throw 'Unexpected EOF in catch block'
+        endif
+        catch_body->add(this.ParseStatement())
+      endwhile
+      catch_node.body = catch_body
+      node.body->add(catch_node)
+    endwhile
+    
+    # Parse finally block (optional)
+    if this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'finally'
+      this.Advance()
+      var finally_node = NewNode(NODE_FINALLY)
+      
+      var finally_body: list<dict<any>> = []
+      while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endtry')
+        if this.current_token.type == TOKEN_EOF
+          throw 'Unexpected EOF in finally block'
+        endif
+        finally_body->add(this.ParseStatement())
+      endwhile
+      finally_node.body = finally_body
+      node.body->add(finally_node)
+    endif
+    
+    this.Expect(TOKEN_KEYWORD)  # 'endtry'
     return node
   enddef
   
