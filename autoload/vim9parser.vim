@@ -4,10 +4,10 @@ vim9script
 #
 # License: This file is placed in the public domain.
 
-# Token type constants
-const TOKEN_EOF = 0
-const TOKEN_EOL = 1
-const TOKEN_SPACE = 2
+# Token type constants (exported for testing)
+export const TOKEN_EOF = 0
+export const TOKEN_EOL = 1
+export const TOKEN_SPACE = 2
 const TOKEN_NUMBER = 3
 const TOKEN_STRING = 4
 const TOKEN_IDENTIFIER = 5
@@ -150,20 +150,13 @@ export class StringReader
   def Peek(offset: number = 0): string
     var col = this.col + offset
     
-    # Handle advance to next line if offset goes beyond current line
-    var current_col = this.col
-    var current_line_str = this.current_line
-    
-    if col < len(current_line_str)
-      return current_line_str[col : col]
+    # Only peek within current line, don't cross line boundaries
+    if col < len(this.current_line)
+      return this.current_line[col : col]
     endif
     
     # At or past end of current line
-    if this.line < len(this.lines) - 1
-      return this.lines[this.line + 1][0 : 0]
-    endif
-    
-    return '<EOF>'
+    return '<EOL>'
   enddef
   
   def Peekn(n: number): string
@@ -176,13 +169,6 @@ export class StringReader
   
   def Advance(n: number = 1): void
     this.col += n
-    
-    # Automatically move to next line if we've reached the end
-    while this.col >= len(this.current_line) && this.line < len(this.lines) - 1
-      this.line += 1
-      this.col = 0
-      this.current_line = this.lines[this.line]
-    endwhile
   enddef
   
   def NextLine(): bool
@@ -268,6 +254,11 @@ export class Vim9Tokenizer
   enddef
   
   def Get(): dict<any>
+    # Skip to next line if at end of current line
+    while this.reader.col >= len(this.reader.current_line) && this.reader.NextLine()
+      # Continue to next line
+    endwhile
+    
     this.reader.SkipWhitespace()
     
     if this.reader.IsEof()
@@ -389,16 +380,16 @@ export class Vim9Tokenizer
     var value = ''
     
     # Read digits
-    while !this.reader.IsEof() && this.reader.Peek() =~ '[0-9]'
+    while !this.reader.IsEof() && this.reader.col < len(this.reader.current_line) && this.reader.Peek() =~ '[0-9]'
       value ..= this.reader.Peek()
       this.reader.Advance(1)
     endwhile
     
     # Read decimal part
-    if this.reader.Peek() == '.' && this.reader.Peekn(2)[1 : 1] =~ '[0-9]'
+    if this.reader.col < len(this.reader.current_line) && this.reader.Peek() == '.' && this.reader.Peekn(2)[1 : 1] =~ '[0-9]'
       value ..= '.'
       this.reader.Advance(1)
-      while !this.reader.IsEof() && this.reader.Peek() =~ '[0-9]'
+      while !this.reader.IsEof() && this.reader.col < len(this.reader.current_line) && this.reader.Peek() =~ '[0-9]'
         value ..= this.reader.Peek()
         this.reader.Advance(1)
       endwhile
@@ -440,7 +431,7 @@ export class Vim9Tokenizer
     var col = this.reader.col
     var value = ''
     
-    while !this.reader.IsEof() && this.reader.Peek() =~ '[A-Za-z0-9_]'
+    while !this.reader.IsEof() && this.reader.col < len(this.reader.current_line) && this.reader.Peek() =~ '[A-Za-z0-9_]'
       value ..= this.reader.Peek()
       this.reader.Advance(1)
     endwhile
