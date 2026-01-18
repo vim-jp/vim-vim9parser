@@ -43,6 +43,10 @@ const TOKEN_AMPERSAND = 34
 const TOKEN_DOTDOTDOT = 35
 const TOKEN_AT = 36
 const TOKEN_SHARP = 37
+const TOKEN_PIPE = 38
+const TOKEN_CARET = 39
+const TOKEN_LSHIFT = 40
+const TOKEN_RSHIFT = 41
 
 # Vim9 keywords
 const KEYWORDS = [
@@ -130,6 +134,12 @@ const NODE_CALL = 313
 const NODE_DOT = 314
 const NODE_SUBSCRIPT = 315
 const NODE_NOT = 316
+const NODE_LAMBDA = 317
+const NODE_BIT_OR = 318
+const NODE_BIT_XOR = 319
+const NODE_BIT_AND = 320
+const NODE_LSHIFT = 321
+const NODE_RSHIFT = 322
 
 # StringReader class
 export class StringReader
@@ -196,6 +206,18 @@ export class StringReader
       line: this.line,
       col: this.col,
     }
+  enddef
+  
+  def LoadLine(): void
+    if this.line < len(this.lines)
+      this.current_line = this.lines[this.line]
+    endif
+  enddef
+  
+  def SetPos(line: number, col: number): void
+    this.line = line
+    this.col = col
+    this.LoadLine()
   enddef
   
   def SkipWhitespace(): void
@@ -305,6 +327,12 @@ export class Vim9Tokenizer
     elseif cc == '>='
       this.reader.Advance(2)
       return this.Token(TOKEN_GTEQ, '>=', line, col)
+    elseif cc == '<<'
+      this.reader.Advance(2)
+      return this.Token(TOKEN_LSHIFT, '<<', line, col)
+    elseif cc == '>>'
+      this.reader.Advance(2)
+      return this.Token(TOKEN_RSHIFT, '>>', line, col)
     elseif cc == '&&'
       this.reader.Advance(2)
       return this.Token(TOKEN_AND, '&&', line, col)
@@ -364,6 +392,10 @@ export class Vim9Tokenizer
       return this.Token(TOKEN_QUESTION, '?', line, col)
     elseif c == '&'
       return this.Token(TOKEN_AMPERSAND, '&', line, col)
+    elseif c == '|'
+      return this.Token(TOKEN_PIPE, '|', line, col)
+    elseif c == '^'
+      return this.Token(TOKEN_CARET, '^', line, col)
     elseif c == '@'
       return this.Token(TOKEN_AT, '@', line, col)
     elseif c == '#'
@@ -1015,7 +1047,23 @@ export class Vim9Parser
   enddef
   
   def ParseExpression(): dict<any>
-    return this.ParseLogicalOr()
+    return this.ParseTernary()
+  enddef
+  
+  def ParseTernary(): dict<any>
+    var condition = this.ParseLogicalOr()
+    
+    if this.current_token.type == TOKEN_QUESTION
+      this.Advance()
+      var true_expr = this.ParseExpression()
+      this.Expect(TOKEN_COLON)
+      var false_expr = this.ParseExpression()
+      var node = NewNode(NODE_TERNARY)
+      node.body = [condition, true_expr, false_expr]
+      return node
+    endif
+    
+    return condition
   enddef
   
   def ParseLogicalOr(): dict<any>
@@ -1036,12 +1084,12 @@ export class Vim9Parser
   enddef
   
   def ParseLogicalAnd(): dict<any>
-    var left = this.ParseComparison()
+    var left = this.ParseBitwiseOr()
     
     while this.current_token.type == TOKEN_AND
       var op = this.current_token.value
       this.Advance()
-      var right = this.ParseComparison()
+      var right = this.ParseBitwiseOr()
       var node = NewNode(NODE_AND)
       node.op = op
       node.left = left
@@ -1052,8 +1100,53 @@ export class Vim9Parser
     return left
   enddef
   
+  def ParseBitwiseOr(): dict<any>
+    var left = this.ParseBitwiseXor()
+    
+    while this.current_token.type == TOKEN_PIPE
+      this.Advance()
+      var right = this.ParseBitwiseXor()
+      var node = NewNode(NODE_BIT_OR)
+      node.left = left
+      node.right = right
+      left = node
+    endwhile
+    
+    return left
+  enddef
+  
+  def ParseBitwiseXor(): dict<any>
+    var left = this.ParseBitwiseAnd()
+    
+    while this.current_token.type == TOKEN_CARET
+      this.Advance()
+      var right = this.ParseBitwiseAnd()
+      var node = NewNode(NODE_BIT_XOR)
+      node.left = left
+      node.right = right
+      left = node
+    endwhile
+    
+    return left
+  enddef
+  
+  def ParseBitwiseAnd(): dict<any>
+    var left = this.ParseComparison()
+    
+    while this.current_token.type == TOKEN_AMPERSAND
+      this.Advance()
+      var right = this.ParseComparison()
+      var node = NewNode(NODE_BIT_AND)
+      node.left = left
+      node.right = right
+      left = node
+    endwhile
+    
+    return left
+  enddef
+  
   def ParseComparison(): dict<any>
-    var left = this.ParseAdditive()
+    var left = this.ParseShift()
     
     while this.current_token.type == TOKEN_EQEQ ||
           this.current_token.type == TOKEN_NEQ ||
@@ -1064,7 +1157,7 @@ export class Vim9Parser
       var op = this.current_token.value
       var tok_type = this.current_token.type
       this.Advance()
-      var right = this.ParseAdditive()
+      var right = this.ParseShift()
       var node = NewNode(NODE_EQUAL)
       if tok_type == TOKEN_NEQ
         node.type = NODE_NEQUAL
@@ -1078,6 +1171,23 @@ export class Vim9Parser
         node.type = NODE_GEQUAL
       endif
       node.op = op
+      node.left = left
+      node.right = right
+      left = node
+    endwhile
+    
+    return left
+  enddef
+  
+  def ParseShift(): dict<any>
+    var left = this.ParseAdditive()
+    
+    while this.current_token.type == TOKEN_LSHIFT ||
+          this.current_token.type == TOKEN_RSHIFT
+      var tok_type = this.current_token.type
+      this.Advance()
+      var right = this.ParseAdditive()
+      var node = NewNode(tok_type == TOKEN_LSHIFT ? NODE_LSHIFT : NODE_RSHIFT)
       node.left = left
       node.right = right
       left = node
@@ -1230,11 +1340,63 @@ export class Vim9Parser
       this.Advance()
       return node
     elseif this.current_token.type == TOKEN_POPEN
-      # Parenthesized expression
+      # Parenthesized expression or lambda: (x) or (x) => x + 1
+      var saved_line = this.reader.line
+      var saved_col = this.reader.col
+      
       this.Advance()
-      var expr = this.ParseExpression()
-      this.Expect(TOKEN_PCLOSE)
-      return expr
+      
+      # Try to parse as lambda
+      var is_lambda = false
+      var params: list<string> = []
+      
+      # Check for lambda parameters
+      if this.current_token.type == TOKEN_PCLOSE
+        # Empty parameter list: () => ...
+        is_lambda = true
+        this.Advance()
+      elseif this.current_token.type == TOKEN_IDENTIFIER
+        # Could be (x) => or (expr)
+        var first_id = this.current_token.value
+        this.Advance()
+        
+        if this.current_token.type == TOKEN_COMMA || this.current_token.type == TOKEN_PCLOSE
+          # Lambda parameter list
+          is_lambda = true
+          params->add(first_id)
+          
+          while this.current_token.type == TOKEN_COMMA
+            this.Advance()
+            if this.current_token.type == TOKEN_IDENTIFIER
+              params->add(this.current_token.value)
+              this.Advance()
+            endif
+          endwhile
+          
+          this.Expect(TOKEN_PCLOSE)
+        else
+          # Not a lambda, restore and parse as expression
+          is_lambda = false
+        endif
+      endif
+      
+      if is_lambda && this.current_token.type == TOKEN_ARROW
+        # Lambda expression: (x, y) => x + y
+        this.Advance()
+        var body_expr = this.ParseExpression()
+        var node = NewNode(NODE_LAMBDA)
+        node.params = params
+        node.body = [body_expr]
+        return node
+      else
+        # Regular parenthesized expression - need to reparse
+        this.reader.SetPos(saved_line, saved_col)
+        this.Advance()  # Skip (
+        this.Advance()  # Reload token
+        var expr = this.ParseExpression()
+        this.Expect(TOKEN_PCLOSE)
+        return expr
+      endif
     elseif this.current_token.type == TOKEN_SQOPEN
       # Array literal: [1, 2, 3]
       this.Advance()
@@ -1340,8 +1502,9 @@ export class Compiler
       for p in node.params
         params_str ..= $'{p.name}: {get(p, "type", "any")} '
       endfor
+      params_str = trim(params_str)
       var ret_str = empty(node.rtype) ? '' : $': {node.rtype}'
-      result->add($'{indent}(def {node.name}({params_str.trim()}){ret_str})')
+      result->add($'{indent}(def {node.name}({params_str}){ret_str})')
       for stmt in node.body
         this.CompileNode(stmt, depth + 1, result)
       endfor
@@ -1384,10 +1547,52 @@ export class Compiler
         endif
       endfor
       result->add($'{indent}(endtry)')
+    elseif node.type == NODE_TERNARY
+      result->add($'{indent}(TERNARY)')
+      for expr in node.body
+        this.CompileNode(expr, depth + 1, result)
+      endfor
     elseif node.type >= 300
       # Expression nodes
-      if node.type == NODE_ADD || node.type == NODE_SUBTRACT || node.type == NODE_MULTIPLY || node.type == NODE_DIVIDE
-        result->add($'{indent}({type_name})')
+      if node.type == NODE_LAMBDA
+        var params_str = join(node.params, ', ')
+        result->add($'{indent}(LAMBDA ({params_str}))')
+        for expr in node.body
+          this.CompileNode(expr, depth + 1, result)
+        endfor
+      elseif node.type == NODE_ADD || node.type == NODE_SUBTRACT || node.type == NODE_MULTIPLY || node.type == NODE_DIVIDE || 
+            node.type == NODE_MODULO || node.type == NODE_OR || node.type == NODE_AND ||
+            node.type == NODE_EQUAL || node.type == NODE_NEQUAL || node.type == NODE_GREATER || node.type == NODE_GEQUAL ||
+            node.type == NODE_SMALLER || node.type == NODE_SEQUAL ||
+            node.type == NODE_BIT_OR || node.type == NODE_BIT_XOR || node.type == NODE_BIT_AND ||
+            node.type == NODE_LSHIFT || node.type == NODE_RSHIFT
+        var op_names = {
+          300: 'ADD', 301: 'SUBTRACT', 302: 'MULTIPLY', 303: 'DIVIDE', 304: 'MODULO',
+          35: 'OR', 36: 'AND', 37: 'EQUAL', 40: 'NEQUAL', 43: 'GREATER', 46: 'GEQUAL',
+          49: 'SMALLER', 52: 'SEQUAL',
+          318: 'BIT_OR', 319: 'BIT_XOR', 320: 'BIT_AND', 321: 'LSHIFT', 322: 'RSHIFT'
+        }
+        var op_name = get(op_names, node.type, string(node.type))
+        result->add($'{indent}({op_name})')
+        if node.left != null
+          this.CompileNode(node.left, depth + 1, result)
+        endif
+        if node.right != null
+          this.CompileNode(node.right, depth + 1, result)
+        endif
+      elseif node.type == NODE_NOT
+        result->add($'{indent}(NOT)')
+        if node.left != null
+          this.CompileNode(node.left, depth + 1, result)
+        endif
+      elseif node.type == NODE_DOT
+        result->add($'{indent}(DOT)')
+        if node.left != null
+          this.CompileNode(node.left, depth + 1, result)
+        endif
+        result->add($'{indent}  (FIELD {node.name})')
+      elseif node.type == NODE_SUBSCRIPT
+        result->add($'{indent}(SUBSCRIPT)')
         if node.left != null
           this.CompileNode(node.left, depth + 1, result)
         endif
@@ -1395,19 +1600,37 @@ export class Compiler
           this.CompileNode(node.right, depth + 1, result)
         endif
       elseif node.type == NODE_CALL
-        result->add($'{indent}(call)')
+        result->add($'{indent}(CALL)')
         if node.left != null
           this.CompileNode(node.left, depth + 1, result)
         endif
         for arg in node.body
           this.CompileNode(arg, depth + 1, result)
         endfor
+      elseif node.type == NODE_LIST
+        result->add($'{indent}(LIST)')
+        for elem in node.body
+          this.CompileNode(elem, depth + 1, result)
+        endfor
+      elseif node.type == NODE_DICT
+        result->add($'{indent}(DICT)')
+        for pair in node.body
+          result->add($'{indent}  (PAIR)')
+          result->add($'{indent}    (KEY {pair.key})')
+          this.CompileNode(pair.value, depth + 2, result)
+        endfor
       elseif node.type == NODE_NUMBER
-        result->add($'{indent}({type_name} {node.value})')
+        result->add($'{indent}(NUMBER {node.value})')
       elseif node.type == NODE_STRING
-        result->add($'{indent}({type_name} "{node.value}")')
+        result->add($'{indent}(STRING "{node.value}")')
       elseif node.type == NODE_IDENTIFIER
-        result->add($'{indent}({type_name} {node.name})')
+        result->add($'{indent}(IDENTIFIER {node.name})')
+      elseif node.type == NODE_TRUE
+        result->add($'{indent}(TRUE)')
+      elseif node.type == NODE_FALSE
+        result->add($'{indent}(FALSE)')
+      elseif node.type == NODE_NULL
+        result->add($'{indent}(NULL)')
       else
         result->add($'{indent}({type_name})')
       endif

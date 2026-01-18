@@ -1,0 +1,6 @@
+(VAR z
+  (BIT_OR)
+    (NUMBER 8)
+    (BIT_AND)
+      (NUMBER 4)
+      (NUMBER 2))

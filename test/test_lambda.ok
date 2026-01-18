@@ -1,0 +1,5 @@
+(VAR fn
+  (LAMBDA (x))
+    (MULTIPLY)
+      (IDENTIFIER x)
+      (NUMBER 2))

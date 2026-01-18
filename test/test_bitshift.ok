@@ -1,0 +1,4 @@
+(VAR y
+  (LSHIFT)
+    (NUMBER 5)
+    (NUMBER 2))

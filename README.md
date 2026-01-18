@@ -32,6 +32,157 @@ Compared to legacy VimL, vim9script adds:
 - New syntax: `var`, `const`, `def`, `class`
 - No more `:` prefix for options access
 - `import` and `export` statements
+- Lambda expressions: `(x) => x * 2`
+- Ternary operator: `condition ? true_val : false_val`
+- Bitwise operators: `<<`, `>>`, `&`, `|`, `^`
+
+## Supported Features
+
+### Declarations
+- `var` - variable declarations with optional type annotations
+- `const` - constant declarations
+- `def` / `enddef` - function definitions with parameter and return types
+- `class` / `endclass` - class definitions
+
+### Control Flow
+- `if` / `elseif` / `else` / `endif`
+- `while` / `endwhile`
+- `for` / `endfor`
+- `try` / `catch` / `finally` / `endtry`
+- `return`
+
+### Expressions
+- Arithmetic operators: `+`, `-`, `*`, `/`, `%`
+- Comparison operators: `==`, `!=`, `<`, `>`, `<=`, `>=`
+- Logical operators: `&&`, `||`, `!`
+- Bitwise operators: `&`, `|`, `^`, `<<`, `>>`
+- Ternary operator: `condition ? true_expr : false_expr`
+- Member access: `obj.field`
+- Array/Dict subscript: `arr[index]`, `dict[key]`
+- Function call: `func(arg1, arg2)`
+- Lambda expressions: `(x, y) => x + y`
+
+### Literals
+- Numbers: `42`, `3.14`
+- Strings: `"hello"`, `'world'`
+- Booleans: `true`, `false`
+- Null: `null`
+- Lists: `[1, 2, 3]`
+- Dictionaries: `{key: value}`
+
+### Module System
+- `import` statements
+- `export` declarations
+
+## Known Limitations and TODO
+
+### Unsupported Syntax
+
+#### String Interpolation
+```vim
+var name = "world"
+var msg = $"Hello, {name}!"  # Not yet supported
+```
+Currently, interpolated strings are parsed as regular strings without expanding the `{...}` expressions.
+
+#### Compound Assignment Operators
+```vim
+x += 5   # Not supported
+x -= 2
+x *= 3
+x /= 2
+x %= 2
+```
+Use `x = x + 5` instead.
+
+#### Line Continuation
+```vim
+var long_expr = 1 +
+  2 +     # May not parse correctly across lines
+  3
+```
+Explicit line continuation with `\` or proper handling of operator-based continuation is not fully implemented.
+
+#### List/Dict Comprehensions
+```vim
+var squares = [for i in range(10): i * i]  # Not supported
+var filtered = [for i in list if i > 5: i]
+```
+
+#### Destructuring Assignment
+```vim
+var [a, b] = [1, 2]  # Not supported
+var {key1, key2} = dict
+```
+
+#### Type Aliases
+```vim
+type MyList = list<string>  # Not supported
+```
+
+#### Interfaces
+```vim
+interface Drawable  # Not supported
+  def Draw(): void
+endinterface
+```
+
+#### Enum (Partial Support)
+```vim
+enum Color  # Token recognized but full semantics not implemented
+  RED
+  GREEN
+  BLUE
+endenum
+```
+
+#### Decorators/Annotations
+```vim
+@cached  # Not supported
+def MyFunc(): void
+enddef
+```
+
+### Semantic Features (Not Implemented)
+
+- **Type Checking**: Type annotations are parsed but not validated
+- **Scope Resolution**: Variable scoping is not tracked
+- **Symbol Table**: No tracking of defined functions/variables/classes
+- **Undefined Reference Detection**: References to undefined symbols are not flagged
+
+### Error Handling Limitations
+
+- **Limited Error Messages**: Errors may not always indicate what was expected
+- **No Error Recovery**: Parser stops at first syntax error
+- **No Warnings**: No detection of unused variables, unreachable code, etc.
+
+### Future Enhancements
+
+1. **High Priority**
+   - Compound assignment operators
+   - Better line continuation handling
+   - Error recovery for multiple error reporting
+   - Extended test coverage
+
+2. **Medium Priority**
+   - String interpolation
+   - Destructuring assignment
+   - List/Dict comprehensions
+   - Full enum support
+
+3. **Low Priority**
+   - Type checking system
+   - Interface support
+   - Language Server Protocol (LSP) integration
+   - Code formatter based on AST
+
+## Contributing
+
+Contributions are welcome! Please feel free to submit pull requests for:
+- Bug fixes
+- New feature implementations
+- Test cases
+- Documentation improvements
 
 ## Relation to vim-vimlparser
 
