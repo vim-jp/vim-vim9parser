@@ -1,41 +1,82 @@
-" Test for vim9parser
+vim9script
+
+# Test for vim9parser
 set nocompatible
 
-let s:base = fnamemodify(resolve(expand('<sfile>')), ':h:h')
-execute 'set runtimepath=' . s:base . ',' . &runtimepath
+var base = fnamemodify(resolve(expand('<sfile>')), ':h:h')
+execute 'set runtimepath=' .. base .. ',' .. &runtimepath
 
-" Test: Parse simple vim9script
-function! Test_parse_simple_var() abort
-  let p = vim9parser#import()
-  let reader = p.StringReader.new(['var x = 1'])
-  let parser = p.Vim9Parser.new()
-  let ast = parser.parse(reader)
+# Test: Parse simple vim9script with var declaration
+def Test_parse_simple_var(): void
+  var p = vim9parser#import()
+  var reader = p.StringReader.new(['var x = 1'])
+  var parser = p.Vim9Parser.new()
+  var ast = parser.parse(reader)
   
-  echo 'Test: Parse simple var'
-  echo ast
-  assert_equal(1, ast.type)  " NODE_TOPLEVEL
+  echomsg 'Test: Parse simple var'
+  assert_equal(1, ast.type)  # NODE_TOPLEVEL
   assert_equal(1, len(ast.body))
-endfunction
+  echomsg 'PASS'
+enddef
 
-" Test: Parse function definition
-function! Test_parse_def() abort
-  let p = vim9parser#import()
-  let lines = [
-    \ 'def Add(x: number, y: number): number',
-    \ '  return x + y',
-    \ 'enddef',
-    \ ]
-  let reader = p.StringReader.new(lines)
-  let parser = p.Vim9Parser.new()
-  let ast = parser.parse(reader)
+# Test: Parse function definition with def
+def Test_parse_def(): void
+  var p = vim9parser#import()
+  var lines = [
+    'def Add(x: number, y: number): number',
+    '  return x + y',
+    'enddef',
+  ]
+  var reader = p.StringReader.new(lines)
+  var parser = p.Vim9Parser.new()
+  var ast = parser.parse(reader)
   
-  echo 'Test: Parse def'
-  echo ast
-  assert_equal(1, ast.type)  " NODE_TOPLEVEL
+  echomsg 'Test: Parse def'
+  assert_equal(1, ast.type)  # NODE_TOPLEVEL
   assert_equal(1, len(ast.body))
-endfunction
+  echomsg 'PASS'
+enddef
 
-call Test_parse_simple_var()
-call Test_parse_def()
+# Test: Parse class definition
+def Test_parse_class(): void
+  var p = vim9parser#import()
+  var lines = [
+    'class MyClass',
+    '  var x: number',
+    'endclass',
+  ]
+  var reader = p.StringReader.new(lines)
+  var parser = p.Vim9Parser.new()
+  var ast = parser.parse(reader)
+  
+  echomsg 'Test: Parse class'
+  assert_equal(1, ast.type)  # NODE_TOPLEVEL
+  assert_equal(1, len(ast.body))
+  echomsg 'PASS'
+enddef
 
-echo 'All tests passed!'
+# Test: Parse import statement
+def Test_parse_import(): void
+  var p = vim9parser#import()
+  var reader = p.StringReader.new(['import autoload "mymodule.vim" as m'])
+  var parser = p.Vim9Parser.new()
+  var ast = parser.parse(reader)
+  
+  echomsg 'Test: Parse import'
+  assert_equal(1, ast.type)  # NODE_TOPLEVEL
+  assert_equal(1, len(ast.body))
+  echomsg 'PASS'
+enddef
+
+# Run tests
+try
+  Test_parse_simple_var()
+  Test_parse_def()
+  Test_parse_class()
+  Test_parse_import()
+  echomsg 'All tests passed!'
+catch
+  echoerr v:exception
+finally
+  quit!
+endtry
