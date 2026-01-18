@@ -160,7 +160,7 @@ def Test(input: any): void
 enddef
 
 # StringReader class
-class StringReader
+export class StringReader
   var lines: list<string>
   var line: number = 0
   var col: number = 0
@@ -251,7 +251,7 @@ class StringReader
   enddef
 endclass
 
-class Vim9Tokenizer
+export class Vim9Tokenizer
   var reader: StringReader
   var current_token: dict<any> = {}
   
@@ -471,7 +471,7 @@ class Vim9Tokenizer
 endclass
 
 # Node structure
-class Node
+export class Node
   var type: number
   var body: list<any> = []
   var line: string = ''
@@ -501,7 +501,7 @@ const OPERATOR_PRECEDENCE = {
 }
 
 # Vim9Parser class
-class Vim9Parser
+export class Vim9Parser
   var reader: StringReader
   var tokenizer: Vim9Tokenizer
   var current_token: dict<any> = {}
@@ -1036,7 +1036,7 @@ class Vim9Parser
 endclass
 
 # Compiler class
-class Compiler
+export class Compiler
   def new()
     enddef
   
