@@ -552,7 +552,20 @@ export class Vim9Parser
   
   def Expect(type: number): dict<any>
     if this.current_token.type != type
-      throw $'Expected token type {type}, got {this.current_token.type}'
+      var type_names = {
+        0: 'EOF',
+        1: 'EOL',
+        5: 'IDENTIFIER',
+        6: 'KEYWORD',
+        7: 'COLON',
+        10: 'POPEN',
+        11: 'PCLOSE',
+        23: 'EQ',
+        24: 'EQEQ',
+      }
+      var expected_name = get(type_names, type, string(type))
+      var got_name = get(type_names, this.current_token.type, string(this.current_token.type))
+      throw $'Syntax error at line {this.reader.line + 1}, col {this.reader.col + 1}: Expected {expected_name}, got {got_name} ({this.current_token.value})'
     endif
     var tok = this.current_token
     this.Advance()
@@ -628,7 +641,7 @@ export class Vim9Parser
     # Parse body
     while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'enddef')
       if this.current_token.type == TOKEN_EOF
-        throw 'Unexpected EOF in def body'
+        throw $'Syntax error at line {this.reader.line + 1}: Unexpected EOF in def body'
       endif
       node.body->add(this.ParseStatement())
     endwhile
@@ -649,7 +662,7 @@ export class Vim9Parser
     # Parse body (members and methods)
     while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endclass')
       if this.current_token.type == TOKEN_EOF
-        throw 'Unexpected EOF in class body'
+        throw $'Syntax error at line {this.reader.line + 1}: Unexpected EOF in class body'
       endif
       
       if this.current_token.value == 'var' || this.current_token.value == 'const'
@@ -781,7 +794,7 @@ export class Vim9Parser
            this.current_token.value != 'elseif' && 
            this.current_token.value != 'endif')
       if this.current_token.type == TOKEN_EOF
-        throw 'Unexpected EOF in if statement'
+        throw $'Syntax error at line {this.reader.line + 1}: Unexpected EOF in if statement (expected endif)'
       endif
       if_body->add(this.ParseStatement())
     endwhile
@@ -811,7 +824,7 @@ export class Vim9Parser
         var else_body: list<dict<any>> = []
         while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endif')
           if this.current_token.type == TOKEN_EOF
-            throw 'Unexpected EOF in else statement'
+            throw $'Syntax error at line {this.reader.line + 1}: Unexpected EOF in else statement'
           endif
           else_body->add(this.ParseStatement())
         endwhile
@@ -837,7 +850,7 @@ export class Vim9Parser
     var body: list<dict<any>> = []
     while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endwhile')
       if this.current_token.type == TOKEN_EOF
-        throw 'Unexpected EOF in while statement'
+        throw $'Syntax error at line {this.reader.line + 1}: Unexpected EOF in while statement'
       endif
       body->add(this.ParseStatement())
     endwhile
@@ -857,7 +870,7 @@ export class Vim9Parser
     
     # Expect 'in'
     if this.current_token.type != TOKEN_KEYWORD || this.current_token.value != 'in'
-      throw 'Expected "in" in for loop'
+      throw $'Syntax error at line {this.reader.line + 1}, col {this.reader.col + 1}: Expected "in" keyword in for loop, got "{this.current_token.value}"'
     endif
     this.Advance()
     
@@ -869,7 +882,7 @@ export class Vim9Parser
     var body: list<dict<any>> = []
     while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endfor')
       if this.current_token.type == TOKEN_EOF
-        throw 'Unexpected EOF in for statement'
+        throw $'Syntax error at line {this.reader.line + 1}: Unexpected EOF in for statement'
       endif
       body->add(this.ParseStatement())
     endwhile
@@ -901,7 +914,7 @@ export class Vim9Parser
     while !(this.current_token.type == TOKEN_KEYWORD && 
             (this.current_token.value == 'catch' || this.current_token.value == 'finally' || this.current_token.value == 'endtry'))
       if this.current_token.type == TOKEN_EOF
-        throw 'Unexpected EOF in try statement'
+        throw $'Syntax error at line {this.reader.line + 1}: Unexpected EOF in try statement'
       endif
       try_body->add(this.ParseStatement())
     endwhile
@@ -924,7 +937,7 @@ export class Vim9Parser
       while !(this.current_token.type == TOKEN_KEYWORD && 
               (this.current_token.value == 'catch' || this.current_token.value == 'finally' || this.current_token.value == 'endtry'))
         if this.current_token.type == TOKEN_EOF
-          throw 'Unexpected EOF in catch block'
+          throw $'Syntax error at line {this.reader.line + 1}: Unexpected EOF in catch block'
         endif
         catch_body->add(this.ParseStatement())
       endwhile
@@ -940,7 +953,7 @@ export class Vim9Parser
       var finally_body: list<dict<any>> = []
       while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endtry')
         if this.current_token.type == TOKEN_EOF
-          throw 'Unexpected EOF in finally block'
+          throw $'Syntax error at line {this.reader.line + 1}: Unexpected EOF in finally block'
         endif
         finally_body->add(this.ParseStatement())
       endwhile
@@ -1264,7 +1277,7 @@ export class Vim9Parser
       node.body = pairs
       return node
     else
-      throw $'Unexpected token in expression: {this.current_token.value}'
+      throw $'Syntax error at line {this.reader.line + 1}, col {this.reader.col + 1}: Unexpected token in expression: "{this.current_token.value}" (type {this.current_token.type})'
     endif
   enddef
 endclass
@@ -1282,33 +1295,133 @@ export class Compiler
   
   def CompileNode(node: dict<any>, depth: number, result: list<string>): void
     var indent = repeat('  ', depth)
+    var type_names = {
+      1: 'TOPLEVEL',
+      13: 'IF',
+      17: 'WHILE',
+      19: 'FOR',
+      23: 'TRY',
+      24: 'CATCH',
+      25: 'FINALLY',
+      27: 'THROW',
+      28: 'ECHO',
+      201: 'VAR',
+      202: 'CONST',
+      203: 'DEF',
+      205: 'CLASS',
+      209: 'IMPORT',
+      210: 'EXPORT',
+      300: 'ADD',
+      305: 'NUMBER',
+      306: 'STRING',
+      307: 'IDENTIFIER',
+      313: 'CALL',
+    }
+    var type_name = get(type_names, node.type, string(node.type))
     
     if node.type == NODE_TOPLEVEL
       for child in node.body
         this.CompileNode(child, depth, result)
       endfor
     elseif node.type == NODE_VAR
-      result->add($'{indent}(var {node.line})')
+      var type_str = empty(node.rtype) ? '' : $' : {node.rtype}'
+      result->add($'{indent}(var {node.name}{type_str})')
+      for expr in node.body
+        this.CompileNode(expr, depth + 1, result)
+      endfor
     elseif node.type == NODE_CONST
-      result->add($'{indent}(const {node.line})')
+      var type_str = empty(node.rtype) ? '' : $' : {node.rtype}'
+      result->add($'{indent}(const {node.name}{type_str})')
+      for expr in node.body
+        this.CompileNode(expr, depth + 1, result)
+      endfor
     elseif node.type == NODE_DEF
-      result->add($'{indent}(def {node.line})')
-      for line in node.body
-        result->add($'{indent}  {line}')
+      var params_str = ''
+      for p in node.params
+        params_str ..= $'{p.name}: {get(p, "type", "any")} '
+      endfor
+      var ret_str = empty(node.rtype) ? '' : $': {node.rtype}'
+      result->add($'{indent}(def {node.name}({params_str.trim()}){ret_str})')
+      for stmt in node.body
+        this.CompileNode(stmt, depth + 1, result)
       endfor
       result->add($'{indent}(enddef)')
     elseif node.type == NODE_CLASS
-      result->add($'{indent}(class {node.line})')
-      for line in node.body
-        result->add($'{indent}  {line}')
+      result->add($'{indent}(class {node.name})')
+      for stmt in node.body
+        this.CompileNode(stmt, depth + 1, result)
       endfor
       result->add($'{indent}(endclass)')
+    elseif node.type == NODE_IF
+      result->add($'{indent}(if)')
+      for stmt in node.body
+        if type(stmt) == v:t_dict && !empty(stmt)
+          this.CompileNode(stmt, depth + 1, result)
+        endif
+      endfor
+      result->add($'{indent}(endif)')
+    elseif node.type == NODE_WHILE
+      result->add($'{indent}(while)')
+      for stmt in node.body
+        if type(stmt) == v:t_dict && !empty(stmt)
+          this.CompileNode(stmt, depth + 1, result)
+        endif
+      endfor
+      result->add($'{indent}(endwhile)')
+    elseif node.type == NODE_FOR
+      result->add($'{indent}(for {node.name})')
+      for stmt in node.body
+        if type(stmt) == v:t_dict && !empty(stmt)
+          this.CompileNode(stmt, depth + 1, result)
+        endif
+      endfor
+      result->add($'{indent}(endfor)')
+    elseif node.type == NODE_TRY
+      result->add($'{indent}(try)')
+      for stmt in node.body
+        if type(stmt) == v:t_dict && !empty(stmt)
+          this.CompileNode(stmt, depth + 1, result)
+        endif
+      endfor
+      result->add($'{indent}(endtry)')
+    elseif node.type >= 300
+      # Expression nodes
+      if node.type == NODE_ADD || node.type == NODE_SUBTRACT || node.type == NODE_MULTIPLY || node.type == NODE_DIVIDE
+        result->add($'{indent}({type_name})')
+        if node.left != null
+          this.CompileNode(node.left, depth + 1, result)
+        endif
+        if node.right != null
+          this.CompileNode(node.right, depth + 1, result)
+        endif
+      elseif node.type == NODE_CALL
+        result->add($'{indent}(call)')
+        if node.left != null
+          this.CompileNode(node.left, depth + 1, result)
+        endif
+        for arg in node.body
+          this.CompileNode(arg, depth + 1, result)
+        endfor
+      elseif node.type == NODE_NUMBER
+        result->add($'{indent}({type_name} {node.value})')
+      elseif node.type == NODE_STRING
+        result->add($'{indent}({type_name} "{node.value}")')
+      elseif node.type == NODE_IDENTIFIER
+        result->add($'{indent}({type_name} {node.name})')
+      else
+        result->add($'{indent}({type_name})')
+      endif
     elseif node.type == NODE_IMPORT
-      result->add($'{indent}(import {node.line})')
+      result->add($'{indent}(import {node.name})')
     elseif node.type == NODE_EXPORT
-      result->add($'{indent}(export {node.line})')
+      result->add($'{indent}(export)')
+      for child in node.body
+        if type(child) == v:t_dict && !empty(child)
+          this.CompileNode(child, depth + 1, result)
+        endif
+      endfor
     else
-      result->add($'{indent}({node.line})')
+      result->add($'{indent}({type_name})')
     endif
   enddef
 endclass
