@@ -8,7 +8,7 @@ execute 'set runtimepath=' .. base .. ',' .. &runtimepath
 
 # Test: Parse var declaration
 def Test_parse_var(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = ['var x: number = 1']
   var reader = p.StringReader.new(lines)
   var parser = p.Vim9Parser.new()
@@ -27,7 +27,7 @@ enddef
 
 # Test: Parse def function
 def Test_parse_def(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = [
     'def Add(x: number, y: number): number',
     '  return x + y',
@@ -59,7 +59,7 @@ enddef
 
 # Test: Parse const declaration
 def Test_parse_const(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = ['const PI: number = 3.14']
   var reader = p.StringReader.new(lines)
   var parser = p.Vim9Parser.new()
@@ -78,7 +78,7 @@ enddef
 
 # Test: Parse class definition
 def Test_parse_class(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = [
     'class MyClass',
     '  var x: number',
@@ -100,7 +100,7 @@ enddef
 
 # Test: Parse import statement
 def Test_parse_import(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = ['import autoload "mymodule.vim" as m']
   var reader = p.StringReader.new(lines)
   var parser = p.Vim9Parser.new()
@@ -119,7 +119,7 @@ enddef
 
 # Test: Parse export def
 def Test_parse_export(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = [
     'export def GetValue(): number',
     '  return 42',
@@ -145,7 +145,7 @@ enddef
 
 # Test: Parse vim9script declaration
 def Test_parse_vim9script(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = [
     'vim9script',
     'var x = 1',

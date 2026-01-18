@@ -8,7 +8,7 @@ execute 'set runtimepath=' .. base .. ',' .. &runtimepath
 
 # Test: Tokenize simple var declaration
 def Test_tokenize_var_declaration(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = ['var x: number = 1']
   var reader = p.StringReader.new(lines)
   var tokenizer = p.Vim9Tokenizer.new(reader)
@@ -45,7 +45,7 @@ enddef
 
 # Test: Tokenize def function
 def Test_tokenize_def(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = ['def Add(x: number, y: number): number']
   var reader = p.StringReader.new(lines)
   var tokenizer = p.Vim9Tokenizer.new(reader)
@@ -70,7 +70,7 @@ enddef
 
 # Test: Tokenize operators
 def Test_tokenize_operators(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = ['x + y == 1 && z >= 2']
   var reader = p.StringReader.new(lines)
   var tokenizer = p.Vim9Tokenizer.new(reader)
@@ -99,7 +99,7 @@ enddef
 
 # Test: Tokenize string
 def Test_tokenize_string(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = ['var s = "hello world"']
   var reader = p.StringReader.new(lines)
   var tokenizer = p.Vim9Tokenizer.new(reader)

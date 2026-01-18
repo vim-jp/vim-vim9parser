@@ -8,7 +8,7 @@ execute 'set runtimepath=' .. base .. ',' .. &runtimepath
 
 # Test: Parse simple vim9script with var declaration
 def Test_parse_simple_var(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var reader = p.StringReader.new(['var x = 1'])
   var parser = p.Vim9Parser.new()
   var ast = parser.parse(reader)
@@ -21,7 +21,7 @@ enddef
 
 # Test: Parse function definition with def
 def Test_parse_def(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = [
     'def Add(x: number, y: number): number',
     '  return x + y',
@@ -39,7 +39,7 @@ enddef
 
 # Test: Parse class definition
 def Test_parse_class(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = [
     'class MyClass',
     '  var x: number',
@@ -57,7 +57,7 @@ enddef
 
 # Test: Parse import statement
 def Test_parse_import(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var reader = p.StringReader.new(['import autoload "mymodule.vim" as m'])
   var parser = p.Vim9Parser.new()
   var ast = parser.parse(reader)

@@ -8,7 +8,7 @@ execute 'set runtimepath=' .. base .. ',' .. &runtimepath
 
 # Test: Parse simple addition
 def Test_expr_addition(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = ['var x = 1 + 2']
   var reader = p.StringReader.new(lines)
   var parser = p.Vim9Parser.new()
@@ -29,7 +29,7 @@ enddef
 
 # Test: Parse comparison
 def Test_expr_comparison(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = ['var x = 1 == 2']
   var reader = p.StringReader.new(lines)
   var parser = p.Vim9Parser.new()
@@ -46,7 +46,7 @@ enddef
 
 # Test: Parse multiplication with higher precedence
 def Test_expr_precedence(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = ['var x = 1 + 2 * 3']
   var reader = p.StringReader.new(lines)
   var parser = p.Vim9Parser.new()
@@ -68,7 +68,7 @@ enddef
 
 # Test: Parse function call
 def Test_expr_function_call(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = ['var x = Add(1, 2)']
   var reader = p.StringReader.new(lines)
   var parser = p.Vim9Parser.new()
@@ -87,7 +87,7 @@ enddef
 
 # Test: Parse array literal
 def Test_expr_array(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = ['var x = [1, 2, 3]']
   var reader = p.StringReader.new(lines)
   var parser = p.Vim9Parser.new()
@@ -106,7 +106,7 @@ enddef
 
 # Test: Parse member access
 def Test_expr_member_access(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = ['var x = obj.field']
   var reader = p.StringReader.new(lines)
   var parser = p.Vim9Parser.new()
@@ -125,7 +125,7 @@ enddef
 
 # Test: Parse logical AND
 def Test_expr_logical_and(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = ['var x = a && b || c']
   var reader = p.StringReader.new(lines)
   var parser = p.Vim9Parser.new()
@@ -143,7 +143,7 @@ enddef
 
 # Test: Parse parenthesized expression
 def Test_expr_parenthesis(): void
-  var p = vim9parser#import()
+  var p = vim9parser#Import()
   var lines = ['var x = (1 + 2) * 3']
   var reader = p.StringReader.new(lines)
   var parser = p.Vim9Parser.new()

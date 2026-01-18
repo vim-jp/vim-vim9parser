@@ -4,15 +4,6 @@ vim9script
 #
 # License: This file is placed in the public domain.
 
-def import(): dict<any>
-  return {
-    StringReader: StringReader,
-    Vim9Tokenizer: Vim9Tokenizer,
-    Vim9Parser: Vim9Parser,
-    Compiler: Compiler,
-  }
-enddef
-
 # Token type constants
 const TOKEN_EOF = 0
 const TOKEN_EOL = 1
@@ -140,7 +131,7 @@ const NODE_DOT = 314
 const NODE_SUBSCRIPT = 315
 const NODE_NOT = 316
 
-def test(input: any): void
+def Test(input: any): void
   try
     var lines: list<string>
     if type(input) == v:t_string
@@ -156,9 +147,9 @@ def test(input: any): void
     var reader = StringReader.new(lines)
     var parser = Vim9Parser.new()
     var compiler = Compiler.new()
-    var ast = parser.parse(reader)
+    var ast = parser.Parse(reader)
     
-    for line in compiler.compile(ast)
+    for line in compiler.Compile(ast)
       echo line
     endfor
   catch
@@ -175,17 +166,16 @@ class StringReader
   var col: number = 0
   var current_line: string = ''
   
-  def new(lines: list<string>): StringReader
+  def new(lines: list<string>)
     this.lines = lines
     this.line = 0
     this.col = 0
     if len(lines) > 0
       this.current_line = lines[0]
     endif
-    return this
-  enddef
+    enddef
   
-  def peek(offset: number = 0): string
+  def Peek(offset: number = 0): string
     var col = this.col + offset
     
     # Handle advance to next line if offset goes beyond current line
@@ -204,7 +194,7 @@ class StringReader
     return '<EOF>'
   enddef
   
-  def peekn(n: number): string
+  def Peekn(n: number): string
     var end = this.col + n
     if end <= len(this.current_line)
       return this.current_line[this.col : end - 1]
@@ -212,7 +202,7 @@ class StringReader
     return this.current_line[this.col : ]
   enddef
   
-  def advance(n: number = 1): void
+  def Advance(n: number = 1): void
     this.col += n
     
     # Automatically move to next line if we've reached the end
@@ -223,7 +213,7 @@ class StringReader
     endwhile
   enddef
   
-  def next_line(): bool
+  def NextLine(): bool
     if this.line < len(this.lines) - 1
       this.line += 1
       this.col = 0
@@ -233,7 +223,7 @@ class StringReader
     return false
   enddef
   
-  def iseof(): bool
+  def IsEof(): bool
     if this.line >= len(this.lines)
       return true
     endif
@@ -243,19 +233,19 @@ class StringReader
     return false
   enddef
   
-  def getpos(): dict<any>
+  def Getpos(): dict<any>
     return {
       line: this.line,
       col: this.col,
     }
   enddef
   
-  def skip_whitespace(): void
+  def SkipWhitespace(): void
     var iterations = 0
     var max_iterations = 10000
     
-    while !this.iseof() && this.peek() =~ '[ \t]' && iterations < max_iterations
-      this.advance()
+    while !this.IsEof() && this.Peek() =~ '[ \t]' && iterations < max_iterations
+      this.Advance()
       iterations += 1
     endwhile
   enddef
@@ -265,12 +255,11 @@ class Vim9Tokenizer
   var reader: StringReader
   var current_token: dict<any> = {}
   
-  def new(reader: StringReader): Vim9Tokenizer
+  def new(reader: StringReader)
     this.reader = reader
-    return this
-  enddef
+    enddef
   
-  def token(type: number, value: string, line: number, col: number): dict<any>
+  def Token(type: number, value: string, line: number, col: number): dict<any>
     return {
       type: type,
       value: value,
@@ -279,12 +268,12 @@ class Vim9Tokenizer
     }
   enddef
   
-  def peek(): dict<any>
+  def Peek(): dict<any>
     var saved_line = this.reader.line
     var saved_col = this.reader.col
     var saved_current = this.reader.current_line
     
-    var tok = this.get()
+    var tok = this.Get()
     
     this.reader.line = saved_line
     this.reader.col = saved_col
@@ -293,182 +282,182 @@ class Vim9Tokenizer
     return tok
   enddef
   
-  def get(): dict<any>
-    this.reader.skip_whitespace()
+  def Get(): dict<any>
+    this.reader.SkipWhitespace()
     
-    if this.reader.iseof()
-      return this.token(TOKEN_EOF, '<EOF>', this.reader.line, this.reader.col)
+    if this.reader.IsEof()
+      return this.Token(TOKEN_EOF, '<EOF>', this.reader.line, this.reader.col)
     endif
     
     var line = this.reader.line
     var col = this.reader.col
-    var c = this.reader.peek()
+    var c = this.reader.Peek()
     
     # Numbers
     if c =~ '[0-9]'
-      return this.read_number()
+      return this.ReadNumber()
     endif
     
     # Strings
     if c == '"'
-      return this.read_string('"')
+      return this.ReadString('"')
     endif
     
     if c == "'"
-      return this.read_string("'")
+      return this.ReadString("'")
     endif
     
     # Identifiers and keywords
     if c =~ '[A-Za-z_]'
-      return this.read_identifier()
+      return this.ReadIdentifier()
     endif
     
     # Multi-character operators
-    var cc = this.reader.peekn(2)
+    var cc = this.reader.Peekn(2)
     if cc == '=>'
-      this.reader.advance(2)
-      return this.token(TOKEN_ARROW, '=>', line, col)
+      this.reader.Advance(2)
+      return this.Token(TOKEN_ARROW, '=>', line, col)
     elseif cc == '=='
-      this.reader.advance(2)
-      return this.token(TOKEN_EQEQ, '==', line, col)
+      this.reader.Advance(2)
+      return this.Token(TOKEN_EQEQ, '==', line, col)
     elseif cc == '!='
-      this.reader.advance(2)
-      return this.token(TOKEN_NEQ, '!=', line, col)
+      this.reader.Advance(2)
+      return this.Token(TOKEN_NEQ, '!=', line, col)
     elseif cc == '<='
-      this.reader.advance(2)
-      return this.token(TOKEN_LTEQ, '<=', line, col)
+      this.reader.Advance(2)
+      return this.Token(TOKEN_LTEQ, '<=', line, col)
     elseif cc == '>='
-      this.reader.advance(2)
-      return this.token(TOKEN_GTEQ, '>=', line, col)
+      this.reader.Advance(2)
+      return this.Token(TOKEN_GTEQ, '>=', line, col)
     elseif cc == '&&'
-      this.reader.advance(2)
-      return this.token(TOKEN_AND, '&&', line, col)
+      this.reader.Advance(2)
+      return this.Token(TOKEN_AND, '&&', line, col)
     elseif cc == '||'
-      this.reader.advance(2)
-      return this.token(TOKEN_OR, '||', line, col)
+      this.reader.Advance(2)
+      return this.Token(TOKEN_OR, '||', line, col)
     elseif cc == '..'
-      this.reader.advance(2)
-      if this.reader.peek() == '.'
-        this.reader.advance(1)
-        return this.token(TOKEN_DOTDOTDOT, '...', line, col)
+      this.reader.Advance(2)
+      if this.reader.Peek() == '.'
+        this.reader.Advance(1)
+        return this.Token(TOKEN_DOTDOTDOT, '...', line, col)
       endif
-      return this.token(TOKEN_DOT, '..', line, col)
+      return this.Token(TOKEN_DOT, '..', line, col)
     endif
     
     # Single-character tokens
-    this.reader.advance(1)
+    this.reader.Advance(1)
     if c == ':'
-      return this.token(TOKEN_COLON, ':', line, col)
+      return this.Token(TOKEN_COLON, ':', line, col)
     elseif c == ','
-      return this.token(TOKEN_COMMA, ',', line, col)
+      return this.Token(TOKEN_COMMA, ',', line, col)
     elseif c == ';'
-      return this.token(TOKEN_SEMICOLON, ';', line, col)
+      return this.Token(TOKEN_SEMICOLON, ';', line, col)
     elseif c == '('
-      return this.token(TOKEN_POPEN, '(', line, col)
+      return this.Token(TOKEN_POPEN, '(', line, col)
     elseif c == ')'
-      return this.token(TOKEN_PCLOSE, ')', line, col)
+      return this.Token(TOKEN_PCLOSE, ')', line, col)
     elseif c == '['
-      return this.token(TOKEN_SQOPEN, '[', line, col)
+      return this.Token(TOKEN_SQOPEN, '[', line, col)
     elseif c == ']'
-      return this.token(TOKEN_SQCLOSE, ']', line, col)
+      return this.Token(TOKEN_SQCLOSE, ']', line, col)
     elseif c == '{'
-      return this.token(TOKEN_COPEN, '{', line, col)
+      return this.Token(TOKEN_COPEN, '{', line, col)
     elseif c == '}'
-      return this.token(TOKEN_CCLOSE, '}', line, col)
+      return this.Token(TOKEN_CCLOSE, '}', line, col)
     elseif c == '.'
-      return this.token(TOKEN_DOT, '.', line, col)
+      return this.Token(TOKEN_DOT, '.', line, col)
     elseif c == '+'
-      return this.token(TOKEN_PLUS, '+', line, col)
+      return this.Token(TOKEN_PLUS, '+', line, col)
     elseif c == '-'
-      return this.token(TOKEN_MINUS, '-', line, col)
+      return this.Token(TOKEN_MINUS, '-', line, col)
     elseif c == '*'
-      return this.token(TOKEN_STAR, '*', line, col)
+      return this.Token(TOKEN_STAR, '*', line, col)
     elseif c == '/'
-      return this.token(TOKEN_SLASH, '/', line, col)
+      return this.Token(TOKEN_SLASH, '/', line, col)
     elseif c == '%'
-      return this.token(TOKEN_PERCENT, '%', line, col)
+      return this.Token(TOKEN_PERCENT, '%', line, col)
     elseif c == '='
-      return this.token(TOKEN_EQ, '=', line, col)
+      return this.Token(TOKEN_EQ, '=', line, col)
     elseif c == '<'
-      return this.token(TOKEN_LT, '<', line, col)
+      return this.Token(TOKEN_LT, '<', line, col)
     elseif c == '>'
-      return this.token(TOKEN_GT, '>', line, col)
+      return this.Token(TOKEN_GT, '>', line, col)
     elseif c == '!'
-      return this.token(TOKEN_NOT, '!', line, col)
+      return this.Token(TOKEN_NOT, '!', line, col)
     elseif c == '?'
-      return this.token(TOKEN_QUESTION, '?', line, col)
+      return this.Token(TOKEN_QUESTION, '?', line, col)
     elseif c == '&'
-      return this.token(TOKEN_AMPERSAND, '&', line, col)
+      return this.Token(TOKEN_AMPERSAND, '&', line, col)
     elseif c == '@'
-      return this.token(TOKEN_AT, '@', line, col)
+      return this.Token(TOKEN_AT, '@', line, col)
     elseif c == '#'
-      return this.token(TOKEN_SHARP, '#', line, col)
+      return this.Token(TOKEN_SHARP, '#', line, col)
     endif
     
     # Unknown character
-    return this.token(TOKEN_IDENTIFIER, c, line, col)
+    return this.Token(TOKEN_IDENTIFIER, c, line, col)
   enddef
   
-  def read_number(): dict<any>
+  def ReadNumber(): dict<any>
     var line = this.reader.line
     var col = this.reader.col
     var value = ''
     
     # Read digits
-    while !this.reader.iseof() && this.reader.peek() =~ '[0-9]'
-      value ..= this.reader.peek()
-      this.reader.advance(1)
+    while !this.reader.IsEof() && this.reader.Peek() =~ '[0-9]'
+      value ..= this.reader.Peek()
+      this.reader.Advance(1)
     endwhile
     
     # Read decimal part
-    if this.reader.peek() == '.' && this.reader.peekn(2)[1 : 1] =~ '[0-9]'
+    if this.reader.Peek() == '.' && this.reader.Peekn(2)[1 : 1] =~ '[0-9]'
       value ..= '.'
-      this.reader.advance(1)
-      while !this.reader.iseof() && this.reader.peek() =~ '[0-9]'
-        value ..= this.reader.peek()
-        this.reader.advance(1)
+      this.reader.Advance(1)
+      while !this.reader.IsEof() && this.reader.Peek() =~ '[0-9]'
+        value ..= this.reader.Peek()
+        this.reader.Advance(1)
       endwhile
     endif
     
-    return this.token(TOKEN_NUMBER, value, line, col)
+    return this.Token(TOKEN_NUMBER, value, line, col)
   enddef
   
-  def read_string(quote: string): dict<any>
+  def ReadString(quote: string): dict<any>
     var line = this.reader.line
     var col = this.reader.col
     var value = ''
     
-    this.reader.advance(1)  # Skip opening quote
+    this.reader.Advance(1)  # Skip opening quote
     
-    while !this.reader.iseof()
-      var c = this.reader.peek()
+    while !this.reader.IsEof()
+      var c = this.reader.Peek()
       if c == quote
-        this.reader.advance(1)
+        this.reader.Advance(1)
         break
       elseif c == '\'
         value ..= c
-        this.reader.advance(1)
-        if !this.reader.iseof()
-          value ..= this.reader.peek()
-          this.reader.advance(1)
+        this.reader.Advance(1)
+        if !this.reader.IsEof()
+          value ..= this.reader.Peek()
+          this.reader.Advance(1)
         endif
       else
         value ..= c
-        this.reader.advance(1)
+        this.reader.Advance(1)
       endif
     endwhile
     
-    return this.token(TOKEN_STRING, value, line, col)
+    return this.Token(TOKEN_STRING, value, line, col)
   enddef
   
-  def read_identifier(): dict<any>
+  def ReadIdentifier(): dict<any>
     var line = this.reader.line
     var col = this.reader.col
     var value = ''
     
-    while !this.reader.iseof() && this.reader.peek() =~ '[A-Za-z0-9_]'
-      value ..= this.reader.peek()
-      this.reader.advance(1)
+    while !this.reader.IsEof() && this.reader.Peek() =~ '[A-Za-z0-9_]'
+      value ..= this.reader.Peek()
+      this.reader.Advance(1)
     endwhile
     
     # Check if it's a keyword
@@ -477,7 +466,7 @@ class Vim9Tokenizer
       token_type = TOKEN_KEYWORD
     endif
     
-    return this.token(token_type, value, line, col)
+    return this.Token(token_type, value, line, col)
   enddef
 endclass
 
@@ -489,17 +478,16 @@ class Node
   var pos: number = 0
   var len: number = -1
   var name: string = ''
-  var params: list<dict<string, any>> = []
+  var params: list<any> = []
   var rtype: string = ''
   var value: any = null
   var left: Node = null
   var right: Node = null
   var op: string = ''
   
-  def new(type: number): Node
+  def new(type: number)
     this.type = type
-    return this
-  enddef
+    enddef
 endclass
 
 # Operator precedence table (higher number = higher precedence)
@@ -519,124 +507,123 @@ class Vim9Parser
   var current_token: dict<any> = {}
   var next_token: dict<any> = {}
   
-  def new(): Vim9Parser
-    return this
-  enddef
+  def new()
+    enddef
   
-  def parse(reader: StringReader): Node
+  def Parse(reader: StringReader): Node
     this.reader = reader
     this.tokenizer = Vim9Tokenizer.new(reader)
-    this.advance()  # Load first token
-    this.advance()  # Load second token
+    this.Advance()  # Load first token
+    this.Advance()  # Load second token
     
     var toplevel = Node.new(NODE_TOPLEVEL)
     
     while this.current_token.type != TOKEN_EOF
       if this.current_token.type == TOKEN_KEYWORD
         if this.current_token.value == 'vim9script'
-          this.advance()
+          this.Advance()
           continue
         elseif this.current_token.value == 'var'
-          toplevel.body->add(this.parseVar())
+          toplevel.body->add(this.ParseVar())
         elseif this.current_token.value == 'const'
-          toplevel.body->add(this.parseConst())
+          toplevel.body->add(this.ParseConst())
         elseif this.current_token.value == 'def'
-          toplevel.body->add(this.parseDef())
+          toplevel.body->add(this.ParseDef())
         elseif this.current_token.value == 'class'
-          toplevel.body->add(this.parseClass())
+          toplevel.body->add(this.ParseClass())
         elseif this.current_token.value == 'import'
-          toplevel.body->add(this.parseImport())
+          toplevel.body->add(this.ParseImport())
         elseif this.current_token.value == 'export'
-          toplevel.body->add(this.parseExport())
+          toplevel.body->add(this.ParseExport())
         else
-          this.advance()
+          this.Advance()
         endif
       else
-        this.advance()
+        this.Advance()
       endif
     endwhile
     
     return toplevel
   enddef
   
-  def advance(): void
+  def Advance(): void
     this.current_token = this.next_token
-    this.next_token = this.tokenizer.get()
+    this.next_token = this.tokenizer.Get()
   enddef
   
-  def expect(type: number): dict<any>
+  def Expect(type: number): dict<any>
     if this.current_token.type != type
       throw $'Expected token type {type}, got {this.current_token.type}'
     endif
     var tok = this.current_token
-    this.advance()
+    this.Advance()
     return tok
   enddef
   
-  def parseVar(): Node
+  def ParseVar(): Node
     var node = Node.new(NODE_VAR)
     var start_pos = this.current_token
     
-    this.expect(TOKEN_KEYWORD)  # var
+    this.Expect(TOKEN_KEYWORD)  # var
     
-    var name_tok = this.expect(TOKEN_IDENTIFIER)
+    var name_tok = this.Expect(TOKEN_IDENTIFIER)
     node.name = name_tok.value
     
     # Optional type annotation
     if this.current_token.type == TOKEN_COLON
-      this.advance()
-      node.rtype = this.parseType()
+      this.Advance()
+      node.rtype = this.ParseType()
     endif
     
     # Optional initialization
     if this.current_token.type == TOKEN_EQ
-      this.advance()
-      node.body->add(this.parseExpression())
+      this.Advance()
+      node.body->add(this.ParseExpression())
     endif
     
     return node
   enddef
   
-  def parseConst(): Node
+  def ParseConst(): Node
     var node = Node.new(NODE_CONST)
     
-    this.expect(TOKEN_KEYWORD)  # const
+    this.Expect(TOKEN_KEYWORD)  # const
     
-    var name_tok = this.expect(TOKEN_IDENTIFIER)
+    var name_tok = this.Expect(TOKEN_IDENTIFIER)
     node.name = name_tok.value
     
     # Optional type annotation
     if this.current_token.type == TOKEN_COLON
-      this.advance()
-      node.rtype = this.parseType()
+      this.Advance()
+      node.rtype = this.ParseType()
     endif
     
     # Initialization (required for const)
     if this.current_token.type == TOKEN_EQ
-      this.advance()
-      node.body->add(this.parseExpression())
+      this.Advance()
+      node.body->add(this.ParseExpression())
     endif
     
     return node
   enddef
   
-  def parseDef(): Node
+  def ParseDef(): Node
     var node = Node.new(NODE_DEF)
     
-    this.expect(TOKEN_KEYWORD)  # def
+    this.Expect(TOKEN_KEYWORD)  # def
     
-    var name_tok = this.expect(TOKEN_IDENTIFIER)
+    var name_tok = this.Expect(TOKEN_IDENTIFIER)
     node.name = name_tok.value
     
     # Parse parameters
-    this.expect(TOKEN_POPEN)
-    node.params = this.parseParameterList()
-    this.expect(TOKEN_PCLOSE)
+    this.Expect(TOKEN_POPEN)
+    node.params = this.ParseParameterList()
+    this.Expect(TOKEN_PCLOSE)
     
     # Parse return type
     if this.current_token.type == TOKEN_COLON
-      this.advance()
-      node.rtype = this.parseType()
+      this.Advance()
+      node.rtype = this.ParseType()
     endif
     
     # Parse body
@@ -644,20 +631,20 @@ class Vim9Parser
       if this.current_token.type == TOKEN_EOF
         throw 'Unexpected EOF in def body'
       endif
-      node.body->add(this.parseStatement())
+      node.body->add(this.ParseStatement())
     endwhile
     
-    this.expect(TOKEN_KEYWORD)  # enddef
+    this.Expect(TOKEN_KEYWORD)  # enddef
     
     return node
   enddef
   
-  def parseClass(): Node
+  def ParseClass(): Node
     var node = Node.new(NODE_CLASS)
     
-    this.expect(TOKEN_KEYWORD)  # class
+    this.Expect(TOKEN_KEYWORD)  # class
     
-    var name_tok = this.expect(TOKEN_IDENTIFIER)
+    var name_tok = this.Expect(TOKEN_IDENTIFIER)
     node.name = name_tok.value
     
     # Parse body (members and methods)
@@ -667,87 +654,87 @@ class Vim9Parser
       endif
       
       if this.current_token.value == 'var' || this.current_token.value == 'const'
-        node.body->add(this.parseVar())
+        node.body->add(this.ParseVar())
       elseif this.current_token.value == 'def'
-        node.body->add(this.parseDef())
+        node.body->add(this.ParseDef())
       else
-        this.advance()
+        this.Advance()
       endif
     endwhile
     
-    this.expect(TOKEN_KEYWORD)  # endclass
+    this.Expect(TOKEN_KEYWORD)  # endclass
     
     return node
   enddef
   
-  def parseImport(): Node
+  def ParseImport(): Node
     var node = Node.new(NODE_IMPORT)
     
-    this.expect(TOKEN_KEYWORD)  # import
+    this.Expect(TOKEN_KEYWORD)  # import
     
     # import autoload "module.vim" as m
     if this.current_token.value == 'autoload'
-      this.advance()
+      this.Advance()
     endif
     
-    var path_tok = this.expect(TOKEN_STRING)
+    var path_tok = this.Expect(TOKEN_STRING)
     node.line = path_tok.value
     
     if this.current_token.value == 'as'
-      this.advance()
-      var alias_tok = this.expect(TOKEN_IDENTIFIER)
+      this.Advance()
+      var alias_tok = this.Expect(TOKEN_IDENTIFIER)
       node.name = alias_tok.value
     endif
     
     return node
   enddef
   
-  def parseExport(): Node
+  def ParseExport(): Node
     var node = Node.new(NODE_EXPORT)
     
-    this.expect(TOKEN_KEYWORD)  # export
+    this.Expect(TOKEN_KEYWORD)  # export
     
     if this.current_token.value == 'def'
-      node.body->add(this.parseDef())
+      node.body->add(this.ParseDef())
     elseif this.current_token.value == 'const'
-      node.body->add(this.parseConst())
+      node.body->add(this.ParseConst())
     elseif this.current_token.value == 'var'
-      node.body->add(this.parseVar())
+      node.body->add(this.ParseVar())
     elseif this.current_token.value == 'class'
-      node.body->add(this.parseClass())
+      node.body->add(this.ParseClass())
     endif
     
     return node
   enddef
   
-  def parseStatement(): Node
+  def ParseStatement(): Node
     var node = Node.new(NODE_EXCMD)
     
     # Skip to next meaningful token
     if this.current_token.type != TOKEN_EOF
-      this.advance()
+      this.Advance()
     endif
     
     return node
   enddef
   
-  def parseParameterList(): list<dict<string, any>>
-    var params: list<dict<string, any>> = []
+  def ParseParameterList(): list<any>
+    var params: list<any> = []
     
     while this.current_token.type == TOKEN_IDENTIFIER
-      var param: dict<string, any> = {}
+      var param: dict<any> = {}
       
-      param.name = this.expect(TOKEN_IDENTIFIER).value
+      param.name = this.Expect(TOKEN_IDENTIFIER).value
       
       if this.current_token.type == TOKEN_COLON
-        this.advance()
-        param.type = this.parseType()
+        this.Advance()
+        param.type = this.ParseType()
       endif
       
       params->add(param)
       
       if this.current_token.type == TOKEN_COMMA
-        this.advance()
+        this.Advance()
       else
         break
       endif
@@ -756,7 +743,7 @@ class Vim9Parser
     return params
   enddef
   
-  def parseType(): string
+  def ParseType(): string
     var type_str = ''
     
     if this.current_token.type != TOKEN_IDENTIFIER && this.current_token.type != TOKEN_KEYWORD
@@ -764,15 +751,15 @@ class Vim9Parser
     endif
     
     type_str = this.current_token.value
-    this.advance()
+    this.Advance()
     
     # Handle generic types: list<string>, dict<number>, etc.
     if this.current_token.type == TOKEN_LT
-      this.advance()
+      this.Advance()
       type_str ..= '<'
-      type_str ..= this.parseType()
+      type_str ..= this.ParseType()
       if this.current_token.type == TOKEN_GT
-        this.advance()
+        this.Advance()
         type_str ..= '>'
       endif
     endif
@@ -780,17 +767,17 @@ class Vim9Parser
     return type_str
   enddef
   
-  def parseExpression(): Node
-    return this.parseLogicalOr()
+  def ParseExpression(): Node
+    return this.ParseLogicalOr()
   enddef
   
-  def parseLogicalOr(): Node
-    var left = this.parseLogicalAnd()
+  def ParseLogicalOr(): Node
+    var left = this.ParseLogicalAnd()
     
     while this.current_token.type == TOKEN_OR
       var op = this.current_token.value
-      this.advance()
-      var right = this.parseLogicalAnd()
+      this.Advance()
+      var right = this.ParseLogicalAnd()
       var node = Node.new(NODE_OR)
       node.op = op
       node.left = left
@@ -801,13 +788,13 @@ class Vim9Parser
     return left
   enddef
   
-  def parseLogicalAnd(): Node
-    var left = this.parseComparison()
+  def ParseLogicalAnd(): Node
+    var left = this.ParseComparison()
     
     while this.current_token.type == TOKEN_AND
       var op = this.current_token.value
-      this.advance()
-      var right = this.parseComparison()
+      this.Advance()
+      var right = this.ParseComparison()
       var node = Node.new(NODE_AND)
       node.op = op
       node.left = left
@@ -818,8 +805,8 @@ class Vim9Parser
     return left
   enddef
   
-  def parseComparison(): Node
-    var left = this.parseAdditive()
+  def ParseComparison(): Node
+    var left = this.ParseAdditive()
     
     while this.current_token.type == TOKEN_EQEQ ||
           this.current_token.type == TOKEN_NEQ ||
@@ -829,8 +816,8 @@ class Vim9Parser
           this.current_token.type == TOKEN_GTEQ
       var op = this.current_token.value
       var tok_type = this.current_token.type
-      this.advance()
-      var right = this.parseAdditive()
+      this.Advance()
+      var right = this.ParseAdditive()
       var node = Node.new(NODE_EQUAL)
       if tok_type == TOKEN_NEQ
         node.type = NODE_NEQUAL
@@ -852,15 +839,15 @@ class Vim9Parser
     return left
   enddef
   
-  def parseAdditive(): Node
-    var left = this.parseMultiplicative()
+  def ParseAdditive(): Node
+    var left = this.ParseMultiplicative()
     
     while this.current_token.type == TOKEN_PLUS ||
           this.current_token.type == TOKEN_MINUS
       var op = this.current_token.value
       var tok_type = this.current_token.type
-      this.advance()
-      var right = this.parseMultiplicative()
+      this.Advance()
+      var right = this.ParseMultiplicative()
       var node = Node.new(tok_type == TOKEN_PLUS ? NODE_ADD : NODE_SUBTRACT)
       node.op = op
       node.left = left
@@ -871,16 +858,16 @@ class Vim9Parser
     return left
   enddef
   
-  def parseMultiplicative(): Node
-    var left = this.parseUnary()
+  def ParseMultiplicative(): Node
+    var left = this.ParseUnary()
     
     while this.current_token.type == TOKEN_STAR ||
           this.current_token.type == TOKEN_SLASH ||
           this.current_token.type == TOKEN_PERCENT
       var op = this.current_token.value
       var tok_type = this.current_token.type
-      this.advance()
-      var right = this.parseUnary()
+      this.Advance()
+      var right = this.ParseUnary()
       var node_type = NODE_MULTIPLY
       if tok_type == TOKEN_SLASH
         node_type = NODE_DIVIDE
@@ -897,64 +884,64 @@ class Vim9Parser
     return left
   enddef
   
-  def parseUnary(): Node
+  def ParseUnary(): Node
     if this.current_token.type == TOKEN_NOT
-      this.advance()
-      var operand = this.parseUnary()
+      this.Advance()
+      var operand = this.ParseUnary()
       var node = Node.new(NODE_NOT)
       node.left = operand
       return node
     elseif this.current_token.type == TOKEN_MINUS
-      this.advance()
-      var operand = this.parseUnary()
+      this.Advance()
+      var operand = this.ParseUnary()
       var node = Node.new(NODE_SUBTRACT)
       node.left = operand
       return node
     endif
     
-    return this.parsePostfix()
+    return this.ParsePostfix()
   enddef
   
-  def parsePostfix(): Node
-    var left = this.parsePrimary()
+  def ParsePostfix(): Node
+    var left = this.ParsePrimary()
     
     while true
       if this.current_token.type == TOKEN_DOT
         # Member access: obj.field
-        this.advance()
+        this.Advance()
         if this.current_token.type != TOKEN_IDENTIFIER
           throw $'Expected identifier after ., got {this.current_token.value}'
         endif
         var field = this.current_token.value
-        this.advance()
+        this.Advance()
         var node = Node.new(NODE_DOT)
         node.left = left
         node.name = field
         left = node
       elseif this.current_token.type == TOKEN_SQOPEN
         # Array access: arr[index]
-        this.advance()
-        var index = this.parseExpression()
-        this.expect(TOKEN_SQCLOSE)
+        this.Advance()
+        var index = this.ParseExpression()
+        this.Expect(TOKEN_SQCLOSE)
         var node = Node.new(NODE_SUBSCRIPT)
         node.left = left
         node.right = index
         left = node
       elseif this.current_token.type == TOKEN_POPEN
         # Function call: func(args)
-        this.advance()
+        this.Advance()
         var args: list<Node> = []
         
         while this.current_token.type != TOKEN_PCLOSE && this.current_token.type != TOKEN_EOF
-          args->add(this.parseExpression())
+          args->add(this.ParseExpression())
           if this.current_token.type == TOKEN_COMMA
-            this.advance()
+            this.Advance()
           else
             break
           endif
         endwhile
         
-        this.expect(TOKEN_PCLOSE)
+        this.Expect(TOKEN_PCLOSE)
         var node = Node.new(NODE_CALL)
         node.left = left
         node.body = args
@@ -967,78 +954,78 @@ class Vim9Parser
     return left
   enddef
   
-  def parsePrimary(): Node
+  def ParsePrimary(): Node
     if this.current_token.type == TOKEN_NUMBER
       var node = Node.new(NODE_NUMBER)
       node.value = this.current_token.value
-      this.advance()
+      this.Advance()
       return node
     elseif this.current_token.type == TOKEN_STRING
       var node = Node.new(NODE_STRING)
       node.value = this.current_token.value
-      this.advance()
+      this.Advance()
       return node
     elseif this.current_token.type == TOKEN_IDENTIFIER
       var node = Node.new(NODE_IDENTIFIER)
       node.name = this.current_token.value
-      this.advance()
+      this.Advance()
       return node
     elseif this.current_token.value == 'true'
       var node = Node.new(NODE_TRUE)
-      this.advance()
+      this.Advance()
       return node
     elseif this.current_token.value == 'false'
       var node = Node.new(NODE_FALSE)
-      this.advance()
+      this.Advance()
       return node
     elseif this.current_token.value == 'null'
       var node = Node.new(NODE_NULL)
-      this.advance()
+      this.Advance()
       return node
     elseif this.current_token.type == TOKEN_POPEN
       # Parenthesized expression
-      this.advance()
-      var expr = this.parseExpression()
-      this.expect(TOKEN_PCLOSE)
+      this.Advance()
+      var expr = this.ParseExpression()
+      this.Expect(TOKEN_PCLOSE)
       return expr
     elseif this.current_token.type == TOKEN_SQOPEN
       # Array literal: [1, 2, 3]
-      this.advance()
+      this.Advance()
       var elements: list<Node> = []
       
       while this.current_token.type != TOKEN_SQCLOSE && this.current_token.type != TOKEN_EOF
-        elements->add(this.parseExpression())
+        elements->add(this.ParseExpression())
         if this.current_token.type == TOKEN_COMMA
-          this.advance()
+          this.Advance()
         else
           break
         endif
       endwhile
       
-      this.expect(TOKEN_SQCLOSE)
+      this.Expect(TOKEN_SQCLOSE)
       var node = Node.new(NODE_LIST)
       node.body = elements
       return node
     elseif this.current_token.type == TOKEN_COPEN
       # Dict literal: {key: value}
-      this.advance()
-      var pairs: list<dict<string, Node>> = []
+      this.Advance()
+      var pairs: list<any> = []
       
       while this.current_token.type != TOKEN_CCLOSE && this.current_token.type != TOKEN_EOF
         var key = this.current_token.value
-        this.advance()
-        this.expect(TOKEN_COLON)
-        var value = this.parseExpression()
+        this.Advance()
+        this.Expect(TOKEN_COLON)
+        var value = this.ParseExpression()
         pairs->add({key: key, value: value})
         
         if this.current_token.type == TOKEN_COMMA
-          this.advance()
+          this.Advance()
         else
           break
         endif
       endwhile
       
-      this.expect(TOKEN_CCLOSE)
+      this.Expect(TOKEN_CCLOSE)
       var node = Node.new(NODE_DICT)
       node.body = pairs
       return node
@@ -1050,22 +1037,21 @@ endclass
 
 # Compiler class
 class Compiler
-  def new(): Compiler
-    return this
-  enddef
+  def new()
+    enddef
   
-  def compile(node: Node): list<string>
+  def Compile(node: Node): list<string>
     var result: list<string> = []
-    this.compileNode(node, 0, result)
+    this.CompileNode(node, 0, result)
     return result
   enddef
   
-  def compileNode(node: Node, depth: number, result: list<string>): void
+  def CompileNode(node: Node, depth: number, result: list<string>): void
     var indent = repeat('  ', depth)
     
     if node.type == NODE_TOPLEVEL
       for child in node.body
-        this.compileNode(child, depth, result)
+        this.CompileNode(child, depth, result)
       endfor
     elseif node.type == NODE_VAR
       result->add($'{indent}(var {node.line})')
@@ -1093,11 +1079,31 @@ class Compiler
   enddef
 endclass
 
-# Public interface
-export def vim9parser#import(): dict<any>
-  return import()
+# Public interface - Return global scope
+export def Import(): dict<any>
+  # In Vim9script, we can't return class references directly
+  # Instead, return a dict with function references
+  return {}
 enddef
 
-export def vim9parser#test(input: any): void
-  test(input)
+export def Test(input: any): void
+  var lines: list<any>
+  if type(input) == v:t_string
+    if filereadable(input)
+      lines = readfile(input)
+    else
+      lines = split(input, "\n")
+    endif
+  else
+    lines = input
+  endif
+  
+  var reader = StringReader.new(lines)
+  var parser = Vim9Parser.new()
+  var compiler = Compiler.new()
+  var ast = parser.Parse(reader)
+  
+  for line in compiler.Compile(ast)
+    echo line
+  endfor
 enddef
