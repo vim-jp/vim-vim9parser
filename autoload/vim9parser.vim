@@ -216,8 +216,21 @@ export class StringReader
     var iterations = 0
     var max_iterations = 10000
     
-    while !this.IsEof() && this.Peek() =~ '[ \t]' && iterations < max_iterations
-      this.Advance()
+    while !this.IsEof() && iterations < max_iterations
+      var c = this.Peek()
+      if c =~ '[ \t]'
+        this.Advance()
+      elseif this.col >= len(this.current_line)
+        # Skip to next line
+        if this.NextLine()
+          # Continue to skip whitespace on next line
+          continue
+        else
+          break
+        endif
+      else
+        break
+      endif
       iterations += 1
     endwhile
   enddef
@@ -620,7 +633,7 @@ export class Vim9Parser
     endif
     
     # Parse body
-    while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'enddef'
+    while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'enddef')
       if this.current_token.type == TOKEN_EOF
         throw 'Unexpected EOF in def body'
       endif
@@ -641,7 +654,7 @@ export class Vim9Parser
     node.name = name_tok.value
     
     # Parse body (members and methods)
-    while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endclass'
+    while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endclass')
       if this.current_token.type == TOKEN_EOF
         throw 'Unexpected EOF in class body'
       endif
@@ -796,7 +809,10 @@ export class Vim9Parser
         this.Advance()
         var else_node = NewNode(NODE_ELSE)
         var else_body: list<dict<any>> = []
-        while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endif'
+        while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endif')
+          if this.current_token.type == TOKEN_EOF
+            throw 'Unexpected EOF in else statement'
+          endif
           else_body->add(this.ParseStatement())
         endwhile
         else_node.body = else_body
@@ -819,7 +835,7 @@ export class Vim9Parser
     
     # Parse body
     var body: list<dict<any>> = []
-    while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endwhile'
+    while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endwhile')
       if this.current_token.type == TOKEN_EOF
         throw 'Unexpected EOF in while statement'
       endif
@@ -851,8 +867,7 @@ export class Vim9Parser
     
     # Parse body
     var body: list<dict<any>> = []
-    while this.current_token.type != TOKEN_KEYWORD ||
-          (this.current_token.type == TOKEN_KEYWORD && this.current_token.value != 'endfor')
+    while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endfor')
       if this.current_token.type == TOKEN_EOF
         throw 'Unexpected EOF in for statement'
       endif
