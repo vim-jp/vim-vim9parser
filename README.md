@@ -136,6 +136,23 @@ Compared to legacy VimL, vim9script adds:
 - **Destructuring Assignment**: Both list `var [a, b] = [1, 2]` and dict `var {x, y} = dict` patterns
 - **List Comprehensions**: `[for i in range(10): i * i]` and with filters `[for i in list if i > 5: i]`
 
+### Bug Fixes (Latest Session)
+- **Syntax Error Fixes**: Fixed multiple critical parsing errors in vim9parser.vim
+  - Fixed class definition indentation and missing `enddef` statements
+  - Fixed undefined variable references in type error messages
+  - Fixed empty `throw` statement (now includes exception value)
+  - Added proper `export` keywords to parser classes
+- **Type System**: Corrected ParseType/ParseTypeString confusion throughout codebase
+  - Type annotations now properly distinguished from type declarations
+  - Generic type parsing (e.g., `list<string>`) now works correctly
+- **New Operators**: Added support for additional Vim9 operators
+  - Method chaining with `->` operator
+  - Regex matching operators `=~` and `!~`
+- **Advanced Features**: Implemented missing Vim9 language features
+  - Default parameter values: `def func(x: number = 0)`
+  - String/list slicing: `str[start:end]`
+  - Proper handling of method calls and chaining
+
 ## Known Limitations and TODO
 
 ### Unsupported Syntax
@@ -180,6 +197,7 @@ enddef
 - **Incremental Parsing**: Not supported - full file re-parse on every change
 - **Hybrid Files**: Limited support for files that mix legacy VimL and vim9script
 - **Error Handling**: Limited error messages; parser stops at first syntax error
+- **Comment Handling**: Inline comments after code statements are not fully supported in all contexts (partial skip-to-EOL after `#` character)
 
 ### Future Work (Prioritized for LSP Goal)
 
