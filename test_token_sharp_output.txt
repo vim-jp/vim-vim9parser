@@ -1,0 +1,21 @@
+Testing TOKEN_SHARP handling...
+
+Test: Simple var with inline comment
+  ✗ FAIL: Should have failed but succeeded
+
+Test: Function with inline comment
+  ⚠ EXPECTED: TOKEN_SHARP error (known issue)
+
+Test: Expression with comment on next line
+  ⚠ EXPECTED: TOKEN_SHARP error (known issue)
+
+Test: Map with inline comment after lambda
+  ✗ FAIL: Should have failed but succeeded
+
+Summary:
+  Passed: 0
+  Failed: 2
+  Expected failures (TOKEN_SHARP): 2
+
+Note: Tests marked as "EXPECTED" show the TOKEN_SHARP issue.
+This is the issue that needs to be fixed in ParsePrimary().
