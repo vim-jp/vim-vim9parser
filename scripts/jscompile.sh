@@ -1,2 +1,3 @@
 #!/bin/sh
-vim -u NONE -i NONE -E -s -N -R -X --cmd 'set rtp+=.' -c 'exe "so" argv()[0]' -c q -- js/jscompiler.vim $*
+cd "$(dirname "$0")/.."
+vim -u NONE -i NONE -E -N -R -X --cmd 'set rtp+=.' -S jscompiler.vim -- "$@"

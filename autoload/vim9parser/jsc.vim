@@ -4,6 +4,7 @@ vim9script
 # Compiles AST to JavaScript code
 
 const NODE_TOPLEVEL = 1
+const NODE_TYPE = 213
 const NODE_VAR = 201
 const NODE_CONST = 202
 const NODE_DEF = 203
@@ -80,6 +81,8 @@ export class JSCompiler
   def CompileNode(node: dict<any>): string
     if node.type == NODE_TOPLEVEL
       return this.CompileToplevel(node)
+    elseif node.type == NODE_TYPE
+      return this.CompileType(node)
     elseif node.type == NODE_VAR
       return this.CompileVar(node)
     elseif node.type == NODE_CONST
@@ -112,6 +115,12 @@ export class JSCompiler
     endif
   enddef
   
+  def CompileType(node: dict<any>): string
+    # JavaScript doesn't have type aliases, so we skip them
+    this.Out($'// type alias: {node.name}')
+    return ''
+  enddef
+  
   def CompileToplevel(node: dict<any>): string
     for stmt in node.body
       if type(stmt) == v:t_dict && !empty(stmt)
@@ -125,7 +134,10 @@ export class JSCompiler
     var type_str = empty(node.rtype) ? '' : $': {node.rtype}'
     var init = ''
     if len(node.body) > 0
-      init = $' = {this.CompileExpr(node.body[0])}'
+      var expr_result = this.CompileExpr(node.body[0])
+      if !empty(expr_result)
+        init = $' = {expr_result}'
+      endif
     endif
     this.Out($'let {node.name}{type_str}{init};')
     return ''
@@ -135,7 +147,10 @@ export class JSCompiler
     var type_str = empty(node.rtype) ? '' : $': {node.rtype}'
     var init = ''
     if len(node.body) > 0
-      init = $' = {this.CompileExpr(node.body[0])}'
+      var expr_result = this.CompileExpr(node.body[0])
+      if !empty(expr_result)
+        init = $' = {expr_result}'
+      endif
     endif
     this.Out($'const {node.name}{type_str}{init};')
     return ''
