@@ -8,3 +8,20 @@ dist/
 build/
 .pytest_cache/
 node_modules/
+
+# Test files
+test_*.vim
+debug_*.vim
+debug_*.log
+test_*.log
+compile_*.vim
+compile_*.log
+simple_*.vim
+simple_*.log
+remove_comments.vim
+generate_js.vim
+update_js*.vim
+update_js*.log
+test.log
+*.swp
+.swp
