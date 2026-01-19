@@ -1,0 +1,14 @@
+Testing comment handling with increasing data sizes...
+Test 1: Reading vim9parser.vim file
+  Read 2092 lines
+Test 2: First 10 lines
+  Subset size: 10
+Test 3: Filter small subset
+  Filtered to 3 lines
+Test 4: Filter 100 lines
+  Filtered to 88 lines
+Test 5: StringReader with 10 lines
+  Reader created with 10 lines
+Test 6: StringReader with 100 lines
+  Reader created with 100 lines
+Success! All tests completed
