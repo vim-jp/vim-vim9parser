@@ -183,11 +183,18 @@ enddef
 
 #### Phase 1: LSP Foundation (CRITICAL)
 1. **Symbol Table Implementation** ⚠️ **HIGHEST PRIORITY**
-   - Track function definitions (name, parameters, return type, line number)
-   - Track variable declarations (name, type, scope, initialization)
-   - Track class/import definitions
-   - Support for scoped symbols (local, script-level, global)
-   - **Why**: LSP completion requires knowing what symbols are available at cursor position
+   - **REQUIREMENT**: Must be compatible with vim-vimlparser Buffer interface
+   - Implement `Vim9Buffer` class with same methods as vim-vimlparser's `Buffer`:
+     - `getGlobalFunctions(): Record<string, IFunction[]>`
+     - `getScriptFunctions(): Record<string, IFunction[]>`
+     - `getGlobalIdentifiers(): Record<string, IIdentifier[]>`
+     - `getLocalIdentifiers(): Record<string, IIdentifier[]>`
+     - `getFunctionLocalIdentifierItems(line): CompletionItem[]`
+   - Extract function definitions (name, args, startLine, startCol, endLine, endCol, range)
+   - Extract variable declarations with scope (g:, s:, l:, a:, b:)
+   - Track class/import definitions for vim9script
+   - **Why**: vim-language-server expects this exact interface; without it, dispatcher pattern fails
+   - **See**: [ANALYSIS.md](ANALYSIS.md) for detailed interface specification
 
 2. **Scope Analysis**
    - Function-local scope vs script-level scope
