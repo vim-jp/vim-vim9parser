@@ -1,7 +1,0 @@
-Debugging AST...
-Read 3 lines
-Parse successful!
-Body items: 3
-Stmt 0: type=201 name=  value=
-Stmt 1: type=202 name=  value=
-Stmt 2: type=201 name=  value=
