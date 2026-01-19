@@ -61,6 +61,8 @@ let js_lines = js_compiler.Compile(ast)
 echo join(js_lines, "\n")
 ```
 
+**Note**: Full JavaScript code generation for the entire parser is currently not automated due to vim9script execution limitations in batch mode. The JSCompiler class is available for API-level transpilation. See `js/jscompiler.vim` for manual compilation if needed.
+
 ## Vim9Script Extensions
 
 Compared to legacy VimL, vim9script adds:
@@ -232,7 +234,7 @@ enddef
 - Type checking system
 - Interface support
 - Language Server Protocol reference implementation
-- JavaScript compilation to production-grade code
+- JavaScript compilation to production-grade code (requires Node.js build environment)
 
 ## Contributing
 

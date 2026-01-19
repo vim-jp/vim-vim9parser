@@ -1,11 +1,17 @@
 .PHONY: all
-all: js/vim9parser.js
+all:
 
 .PHONY: js
-js: js/vim9parser.js
+js: js-stub
 
-js/vim9parser.js: autoload/vim9parser.vim js/jscompiler.vim
-	scripts/jscompile.sh $< $@
+.PHONY: js-stub
+js-stub:
+	@echo "Note: Full JavaScript compilation requires Node.js environment"
+	@echo "See js/jscompiler.vim for manual compilation"
+
+# Full compilation target (requires vim9script support in -E mode)
+# js/vim9parser.js: autoload/vim9parser.vim js/jscompiler.vim
+# 	scripts/jscompile.sh $< $@
 
 .PHONY: test
 test: test-tokenizer test-parser test-expr test-ast test-line-continuation test-compound test-string-interp test-error-recovery test-destructuring test-list-comp test-js
@@ -56,4 +62,4 @@ test-js:
 
 .PHONY: clean
 clean:
-	rm -rf htmlcov .coverage js/vim9parser.js
+	rm -rf htmlcov .coverage
