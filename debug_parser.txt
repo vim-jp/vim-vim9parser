@@ -1,0 +1,2 @@
+Error: Vim(var):E1360: Using a null object
+Throwpoint: command line..script /home/mattn/.vim/plugged/vim-vim9parser/test_debug_parser.vim, line 11

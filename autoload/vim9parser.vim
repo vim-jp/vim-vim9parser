@@ -152,19 +152,21 @@ const NODE_RSHIFT = 322
 
 # StringReader class
 export class StringReader
-  var lines: list<string>
-  var line: number = 0
-  var col: number = 0
-  var current_line: string = ''
-  
-  def new(lines: list<string>)
-    this.lines = lines->map((_, l) => substitute(l, '^[ \t]*$', '', ''))
-    this.line = 0
-    this.col = 0
-    if len(this.lines) > 0
-      this.current_line = this.lines[0]
-    endif
-  enddef
+   var lines: list<string>
+   var line: number = 0
+   var col: number = 0
+   var current_line: string = ''
+   
+   def new(lines: list<string>)
+     # Store all lines as-is (don't filter comments)
+     # This allows inline comments to be tokenized
+     this.lines = lines->map((_, l) => substitute(l, '^[ \t]*$', '', ''))
+     this.line = 0
+     this.col = 0
+     if len(this.lines) > 0
+       this.current_line = this.lines[0]
+     endif
+   enddef
   
   def Peek(offset: number = 0): string
     var col = this.col + offset
