@@ -81,6 +81,10 @@ Compared to legacy VimL, vim9script adds:
 ## Recently Implemented Features
 
 ### Recently Added (Latest)
+- **Line Continuation**: Both explicit `\` continuation and operator-based continuation across lines
+  - `var x = 1 +\` (explicit backslash)
+  - `var x = 1 +` (operator-based, continues to next line)
+  - Function calls and subscripts continue naturally across lines
 - **Compound Assignment Operators**: `+=`, `-=`, `*=`, `/=`, `%=` are now fully supported
 - **String Interpolation**: `$"Hello, {name}!"` syntax is now parsed (preserves interpolation expressions)
 - **Error Recovery**: Parser now tracks errors without throwing immediately, allowing for multiple error reporting
@@ -90,14 +94,6 @@ Compared to legacy VimL, vim9script adds:
 ## Known Limitations and TODO
 
 ### Unsupported Syntax
-
-#### Line Continuation
-```vim
-var long_expr = 1 +
-  2 +     # May not parse correctly across lines
-  3
-```
-Explicit line continuation with `\` or proper handling of operator-based continuation is not fully implemented.
 
 #### Type Aliases
 ```vim
@@ -142,7 +138,6 @@ enddef
 ### Future Enhancements
 
 1. **High Priority**
-   - Better line continuation handling
    - Extended test coverage
 
 2. **Medium Priority**

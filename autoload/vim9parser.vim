@@ -234,18 +234,57 @@ export class StringReader
       if c =~ '[ \t]'
         this.Advance()
       elseif this.col >= len(this.current_line)
-        # Skip to next line
-        if this.NextLine()
-          # Continue to skip whitespace on next line
-          continue
+        # Check for line continuation
+        if this.col == len(this.current_line) && this.current_line != ''
+          # Check if line ends with continuation character \
+          if this.current_line[-1 : -1] == '\'
+            # Line continuation - skip the backslash and go to next line
+            if this.NextLine()
+              continue
+            else
+              break
+            endif
+          else
+            # No continuation, skip to next line
+            if this.NextLine()
+              continue
+            else
+              break
+            endif
+          endif
         else
-          break
+          # Skip to next line
+          if this.NextLine()
+            # Continue to skip whitespace on next line
+            continue
+          else
+            break
+          endif
         endif
       else
         break
       endif
       iterations += 1
     endwhile
+  enddef
+  
+  def HasLineContinuation(): bool
+    # Check if current line ends with backslash (line continuation)
+    if len(this.current_line) > 0 && this.current_line[-1 : -1] == '\'
+      return true
+    endif
+    return false
+  enddef
+  
+  def SkipLineContinuation(): void
+    # Skip the backslash at end of line and move to next line
+    if this.HasLineContinuation()
+      this.col = len(this.current_line)  # Position at backslash
+      this.col += 1  # Move past backslash
+      if this.NextLine()
+        this.col = 0
+      endif
+    endif
   enddef
 endclass
 
@@ -281,9 +320,12 @@ export class Vim9Tokenizer
   enddef
   
   def Get(): dict<any>
-    # Skip to next line if at end of current line
+    # Skip to next line if at end of current line, handling line continuation
     while this.reader.col >= len(this.reader.current_line) && this.reader.NextLine()
-      # Continue to next line
+      # Check for explicit line continuation with backslash
+      if this.reader.HasLineContinuation()
+        this.reader.SkipLineContinuation()
+      endif
     endwhile
     
     this.reader.SkipWhitespace()
