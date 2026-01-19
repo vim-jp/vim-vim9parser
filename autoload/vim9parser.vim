@@ -1937,12 +1937,16 @@ endclass
 
 # Public interface - Return global scope
 export def Import(): dict<any>
+  # Import JSCompiler
+  var jsc = import('./vim9parser/jsc.vim')
+  
   # Return dict with class references and constants for testing
   return {
     StringReader: StringReader,
     Vim9Parser: Vim9Parser,
     Vim9Tokenizer: Vim9Tokenizer,
     Compiler: Compiler,
+    JSCompiler: jsc.JSCompiler,
     NODE_TOPLEVEL: NODE_TOPLEVEL,
     NODE_VAR: NODE_VAR,
     NODE_CONST: NODE_CONST,

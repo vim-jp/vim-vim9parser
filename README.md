@@ -16,11 +16,29 @@ Compatible with vim-vimlparser for unified interface.
 
 ## Usage
 
+### Parse Vim9 Script
+
 ```vim
-let p = vim9parser#new()
-let r = p.parse(stringreader)
-let c = vim9parser#Compiler.new()
-echo join(c.compile(r), "\n")
+let p = vim9parser#Import()
+let lines = ['var x = 1 + 2']
+let reader = p.StringReader.new(lines)
+let parser = p.Vim9Parser.new()
+let ast = parser.Parse(reader)
+```
+
+### Compile to AST Representation
+
+```vim
+let compiler = p.Compiler.new()
+echo join(compiler.Compile(ast), "\n")
+```
+
+### Compile to JavaScript
+
+```vim
+let js_compiler = p.JSCompiler.new()
+let js_lines = js_compiler.Compile(ast)
+echo join(js_lines, "\n")
 ```
 
 ## Vim9Script Extensions
@@ -81,6 +99,11 @@ Compared to legacy VimL, vim9script adds:
 ## Recently Implemented Features
 
 ### Recently Added (Latest)
+- **JavaScript Compiler**: Generate JavaScript code from Vim9 AST
+  - `JSCompiler` class for transpiling to JavaScript
+  - Support for variables, functions, classes, control flow
+  - List comprehensions compile to JavaScript `.map()` and `.filter()`
+  - Lambda expressions compile to arrow functions
 - **Line Continuation**: Both explicit `\` continuation and operator-based continuation across lines
   - `var x = 1 +\` (explicit backslash)
   - `var x = 1 +` (operator-based, continues to next line)
