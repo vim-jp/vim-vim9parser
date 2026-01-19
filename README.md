@@ -53,6 +53,7 @@ Compared to legacy VimL, vim9script adds:
 
 ### Expressions
 - Arithmetic operators: `+`, `-`, `*`, `/`, `%`
+- Compound assignment operators: `+=`, `-=`, `*=`, `/=`, `%=`
 - Comparison operators: `==`, `!=`, `<`, `>`, `<=`, `>=`
 - Logical operators: `&&`, `||`, `!`
 - Bitwise operators: `&`, `|`, `^`, `<<`, `>>`
@@ -61,6 +62,9 @@ Compared to legacy VimL, vim9script adds:
 - Array/Dict subscript: `arr[index]`, `dict[key]`
 - Function call: `func(arg1, arg2)`
 - Lambda expressions: `(x, y) => x + y`
+- String interpolation: `$"Hello, {name}!"`
+- List comprehensions: `[for i in range(10): i * i]`, `[for i in list if i > 5: i]`
+- Destructuring assignment: `var [a, b] = [1, 2]`, `var {x, y} = dict`
 
 ### Literals
 - Numbers: `42`, `3.14`
@@ -74,26 +78,18 @@ Compared to legacy VimL, vim9script adds:
 - `import` statements
 - `export` declarations
 
+## Recently Implemented Features
+
+### Recently Added (Latest)
+- **Compound Assignment Operators**: `+=`, `-=`, `*=`, `/=`, `%=` are now fully supported
+- **String Interpolation**: `$"Hello, {name}!"` syntax is now parsed (preserves interpolation expressions)
+- **Error Recovery**: Parser now tracks errors without throwing immediately, allowing for multiple error reporting
+- **Destructuring Assignment**: Both list `var [a, b] = [1, 2]` and dict `var {x, y} = dict` patterns
+- **List Comprehensions**: `[for i in range(10): i * i]` and with filters `[for i in list if i > 5: i]`
+
 ## Known Limitations and TODO
 
 ### Unsupported Syntax
-
-#### String Interpolation
-```vim
-var name = "world"
-var msg = $"Hello, {name}!"  # Not yet supported
-```
-Currently, interpolated strings are parsed as regular strings without expanding the `{...}` expressions.
-
-#### Compound Assignment Operators
-```vim
-x += 5   # Not supported
-x -= 2
-x *= 3
-x /= 2
-x %= 2
-```
-Use `x = x + 5` instead.
 
 #### Line Continuation
 ```vim
@@ -102,18 +98,6 @@ var long_expr = 1 +
   3
 ```
 Explicit line continuation with `\` or proper handling of operator-based continuation is not fully implemented.
-
-#### List/Dict Comprehensions
-```vim
-var squares = [for i in range(10): i * i]  # Not supported
-var filtered = [for i in list if i > 5: i]
-```
-
-#### Destructuring Assignment
-```vim
-var [a, b] = [1, 2]  # Not supported
-var {key1, key2} = dict
-```
 
 #### Type Aliases
 ```vim
@@ -153,28 +137,25 @@ enddef
 ### Error Handling Limitations
 
 - **Limited Error Messages**: Errors may not always indicate what was expected
-- **No Error Recovery**: Parser stops at first syntax error
 - **No Warnings**: No detection of unused variables, unreachable code, etc.
 
 ### Future Enhancements
 
 1. **High Priority**
-   - Compound assignment operators
    - Better line continuation handling
-   - Error recovery for multiple error reporting
    - Extended test coverage
 
 2. **Medium Priority**
-   - String interpolation
-   - Destructuring assignment
-   - List/Dict comprehensions
-   - Full enum support
+   - Dict comprehensions: `{for k in list: k: value}`
+   - Full enum support with proper semantics
+   - Type aliases: `type MyList = list<string>`
 
 3. **Low Priority**
    - Type checking system
    - Interface support
    - Language Server Protocol (LSP) integration
    - Code formatter based on AST
+   - Scope resolution and symbol tracking
 
 ## Contributing
 
