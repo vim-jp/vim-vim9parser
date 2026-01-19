@@ -197,7 +197,23 @@ enddef
 - **Incremental Parsing**: Not supported - full file re-parse on every change
 - **Hybrid Files**: Limited support for files that mix legacy VimL and vim9script
 - **Error Handling**: Limited error messages; parser stops at first syntax error
-- **Comment Handling**: Inline comments after code statements are not fully supported in all contexts (partial skip-to-EOL after `#` character)
+- **Comment Handling**: ✅ FIXED - Comments after statements now properly skipped via SkipComments()
+
+### JavaScript Compilation Status
+
+- **StringReader**: ✅ Complete - Full implementation in js/vim9parser.js
+- **Vim9Tokenizer**: ✅ Complete - All token types and keyword detection
+- **Vim9Parser**: ⚠️ Partial - Basic class structure, var/const/def/class/import/export parsing
+  - ❌ Missing: Expression parsing (binary operators, function calls, subscripts)
+  - ❌ Missing: Statement parsing (if/while/for/try blocks)
+  - ❌ Missing: Type string parsing
+  - ❌ Missing: Full lambda and comprehension support
+- **JSCompiler**: ✅ Complete - Compiles Vim9 AST to JavaScript code
+  - ✅ Supports: var/const declarations, function definitions, classes
+  - ✅ Supports: Arithmetic operators, comparisons, logical operators
+  - ✅ Supports: List literals and comprehensions
+  - ❌ Missing: Comment preservation in output
+  - ❌ Missing: Type annotation translation
 
 ### Future Work (Prioritized for LSP Goal)
 
@@ -248,11 +264,19 @@ enddef
 - Better error messages and error recovery
 - Code formatter based on AST
 
-#### Phase 4: Optional Enhancements
+#### Phase 4: JavaScript/TypeScript Output
+- Complete Vim9Parser class export to JavaScript
+- Expression and statement parsing in JavaScript parser
+- Type annotation translation to TypeScript types
+- Comment preservation in compiled output
+- JSCompiler enhancements for complex expressions
+- Node.js module generation with proper exports
+
+#### Phase 5: Optional Enhancements
 - Type checking system
 - Interface support
 - Language Server Protocol reference implementation
-- JavaScript compilation to production-grade code (requires Node.js build environment)
+- Production-grade JavaScript transpilation
 
 ## Contributing
 
@@ -303,8 +327,10 @@ vim9 AST       VimL AST
 
 | Component | Status | Notes |
 |-----------|--------|-------|
-| Vim9 Parsing | ✅ Complete | All major syntax supported |
-| vim9 AST | ✅ Complete | Node types defined |
+| Vim9 Parsing | ✅ Complete | All major syntax supported in Vim9script |
+| vim9 AST | ✅ Complete | Node types defined (200+ node types) |
+| JavaScript Output | ⚠️ Partial | StringReader, Tokenizer, basic Parser exported |
+| JSCompiler | ✅ Complete | Converts Vim9 AST to JavaScript |
 | Symbol Table | ❌ **MISSING** | CRITICAL for LSP |
 | Scope Analysis | ❌ **MISSING** | CRITICAL for Completion |
 | LSP Interface | ❌ **MISSING** | Needs standardization |

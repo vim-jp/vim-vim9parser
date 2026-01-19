@@ -1,14 +1,9 @@
 vim9script
 
-# Vim9 Script Parser
-#
-# License: This file is placed in the public domain.
 
-# Type definitions for clear type system
 export type Token = dict<any>
 export type Node = dict<any>
 
-# Token type constants (exported for testing)
 export const TOKEN_EOF = 0
 export const TOKEN_EOL = 1
 export const TOKEN_SPACE = 2
@@ -57,7 +52,6 @@ const TOKEN_STAREQ = 44
 const TOKEN_SLASHEQ = 45
 const TOKEN_PERCENTEQ = 46
 
-# Vim9 keywords
 const KEYWORDS = [
   'def', 'enddef', 'class', 'endclass', 'var', 'const', 'final',
   'static', 'private', 'protected', 'public', 'extends', 'implements',
@@ -66,7 +60,6 @@ const KEYWORDS = [
   'return', 'throw', 'break', 'continue', 'true', 'false', 'null', 'any', 'type',
 ]
 
-# Node type constants
 const NODE_TOPLEVEL = 1
 const NODE_COMMENT = 2
 const NODE_EXCMD = 3
@@ -110,7 +103,6 @@ const NODE_GEQUAL = 46
 const NODE_SMALLER = 49
 const NODE_SEQUAL = 52
 
-# Vim9 specific node types
 const NODE_VAR = 201
 const NODE_CONST = 202
 const NODE_DEF = 203
@@ -125,7 +117,6 @@ const NODE_ENUM = 211
 const NODE_ENDENUM = 212
 const NODE_TYPE = 213
 
-# Expression node types
 const NODE_ADD = 300
 const NODE_SUBTRACT = 301
 const NODE_MULTIPLY = 302
@@ -151,7 +142,6 @@ const NODE_LSHIFT = 321
 const NODE_RSHIFT = 322
 const NODE_EOF = 323
 
-# StringReader class
 export class StringReader
    var lines: list<string>
    var line: number = 0
@@ -159,8 +149,6 @@ export class StringReader
    var current_line: string = ''
    
    def new(lines: list<string>)
-     # Store all lines as-is (don't filter comments)
-     # This allows inline comments to be tokenized
      this.lines = lines->map((_, l) => substitute(l, '^[ \t]*$', '', ''))
      this.line = 0
      this.col = 0
@@ -172,12 +160,10 @@ export class StringReader
   def Peek(offset: number = 0): string
     var col = this.col + offset
     
-    # Only peek within current line, don't cross line boundaries
     if col < len(this.current_line)
       return this.current_line[col : col]
     endif
     
-    # At or past end of current line
     return '<EOL>'
   enddef
   
@@ -237,9 +223,7 @@ export class StringReader
     var max_iterations = 10000
     
     while !this.IsEof() && iterations < max_iterations
-      # Check if at beginning of line and it's a comment
       if this.col == 0 && this.current_line[0 : 0] == '#'
-        # Skip this comment line
         if !this.NextLine()
           break
         endif
@@ -250,18 +234,14 @@ export class StringReader
       if c =~ '[ \t]'
         this.Advance()
       elseif this.col >= len(this.current_line)
-        # Check for line continuation
         if this.col == len(this.current_line) && this.current_line != ''
-          # Check if line ends with continuation character \
           if this.current_line[-1 : -1] == '\'
-            # Line continuation - skip the backslash and go to next line
             if this.NextLine()
               continue
             else
               break
             endif
           else
-            # No continuation, skip to next line
             if this.NextLine()
               continue
             else
@@ -269,9 +249,7 @@ export class StringReader
             endif
           endif
         else
-          # Skip to next line
           if this.NextLine()
-            # Continue to skip whitespace on next line
             continue
           else
             break
@@ -285,7 +263,6 @@ export class StringReader
   enddef
   
   def HasLineContinuation(): bool
-    # Check if current line ends with backslash (line continuation)
     if len(this.current_line) > 0 && this.current_line[-1 : -1] == '\'
       return true
     endif
@@ -293,7 +270,6 @@ export class StringReader
   enddef
   
   def SkipLineContinuation(): void
-    # Skip the backslash at end of line and move to next line
     if this.HasLineContinuation()
       this.col = len(this.current_line)  # Position at backslash
       this.col += 1  # Move past backslash
@@ -335,27 +311,14 @@ export class Vim9Tokenizer
     return tok
   enddef
   
-  def SkipComments(): void
-    # Skip comments - whitespace already handled by this point
-    # Just skip to end of line if at a comment
-    if this.reader.col < len(this.reader.current_line) && this.reader.Peek() == '#'
-      while this.reader.col < len(this.reader.current_line)
-        this.reader.Advance()
-      endwhile
-    endif
-  enddef
-  
   def Get(): Token
-    # Skip to next line if at end of current line, handling line continuation
     while this.reader.col >= len(this.reader.current_line) && this.reader.NextLine()
-      # Check for explicit line continuation with backslash
       if this.reader.HasLineContinuation()
         this.reader.SkipLineContinuation()
       endif
     endwhile
     
     this.reader.SkipWhitespace()
-    this.SkipComments()
     
     if this.reader.IsEof()
       return this.Token(TOKEN_EOF, '<EOF>', this.reader.line, this.reader.col)
@@ -365,12 +328,10 @@ export class Vim9Tokenizer
     var col = this.reader.col
     var c = this.reader.Peek()
     
-    # Numbers
     if c =~ '[0-9]'
       return this.ReadNumber()
     endif
     
-    # Strings (including interpolated strings)
      if c == '"'
        return this.ReadString('"')
      endif
@@ -379,7 +340,6 @@ export class Vim9Tokenizer
        return this.ReadString("'")
      endif
      
-     # Check for interpolated string $"..."
      if c == '$'
        var next_char = this.reader.Peekn(2)[1 : 1]
        if next_char == '"'
@@ -388,12 +348,10 @@ export class Vim9Tokenizer
        endif
      endif
     
-    # Identifiers and keywords
     if c =~ '[A-Za-z_]'
       return this.ReadIdentifier()
     endif
     
-    # Multi-character operators
     var cc = this.reader.Peekn(2)
     if cc == '->'
       this.reader.Advance(2)
@@ -455,7 +413,6 @@ export class Vim9Tokenizer
        return this.Token(TOKEN_DOT, '..', line, col)
      endif
     
-    # Single-character tokens
     this.reader.Advance(1)
     if c == ':'
       return this.Token(TOKEN_COLON, ':', line, col)
@@ -509,7 +466,6 @@ export class Vim9Tokenizer
       return this.Token(TOKEN_SHARP, '#', line, col)
     endif
     
-    # Unknown character
     return this.Token(TOKEN_IDENTIFIER, c, line, col)
   enddef
   
@@ -518,13 +474,11 @@ export class Vim9Tokenizer
     var col = this.reader.col
     var value = ''
     
-    # Read digits
     while !this.reader.IsEof() && this.reader.col < len(this.reader.current_line) && this.reader.Peek() =~ '[0-9]'
       value ..= this.reader.Peek()
       this.reader.Advance(1)
     endwhile
     
-    # Read decimal part
     if this.reader.col < len(this.reader.current_line) && this.reader.Peek() == '.' && this.reader.Peekn(2)[1 : 1] =~ '[0-9]'
       value ..= '.'
       this.reader.Advance(1)
@@ -585,7 +539,6 @@ export class Vim9Tokenizer
           this.reader.Advance(1)
         endif
       elseif c == '{'
-        # Preserve the entire interpolation expression as is
         value ..= c
         this.reader.Advance(1)
         var brace_count = 1
@@ -605,7 +558,6 @@ export class Vim9Tokenizer
       endif
     endwhile
     
-    # Return as a TOKEN_STRING with a special marker in the value
     return this.Token(TOKEN_STRING, $'${{{value}}}', line, col)
   enddef
   
@@ -623,7 +575,6 @@ export class Vim9Tokenizer
       this.reader.Advance(1)
     endwhile
     
-    # Check if it's a keyword
     var token_type = TOKEN_IDENTIFIER
     if index(KEYWORDS, value) >= 0
       token_type = TOKEN_KEYWORD
@@ -633,7 +584,6 @@ export class Vim9Tokenizer
   enddef
 endclass
 
-# Node structure - dict based factory function to avoid Vim9script class limitations
 export def NewNode(type_val: number): Node
   return {
     line: 0,
@@ -645,7 +595,6 @@ export def NewNode(type_val: number): Node
   }
 enddef
 
-# Operator precedence table (higher number = higher precedence)
 const OPERATOR_PRECEDENCE = {
   '||': 1,
   '&&': 2,
@@ -655,7 +604,6 @@ const OPERATOR_PRECEDENCE = {
   '!': 6,  # unary
 }
 
-# Vim9Parser class
 export class Vim9Parser
   var reader: StringReader
   var tokenizer: Vim9Tokenizer
@@ -685,7 +633,6 @@ export class Vim9Parser
         continue
       endif
       
-      # Parse top-level statements
       var stmt = this.ParseTopLevelStatement()
       if len(stmt) > 0  # Check if dict is not empty
         toplevel.body->add(stmt)
@@ -696,15 +643,11 @@ export class Vim9Parser
   enddef
   
   def ParseTopLevelStatement(): Node
-    # Only certain keywords are allowed at top level
     if this.current_token.type != TOKEN_KEYWORD
-      # Skip non-keyword tokens
       this.Advance()
       return {}
     endif
-    # Only certain keywords are allowed at top level
     if this.current_token.type != TOKEN_KEYWORD
-      # Skip non-keyword tokens
       this.Advance()
       return {}
     endif
@@ -734,7 +677,6 @@ export class Vim9Parser
     elseif this.current_token.value == 'type'
       return this.ParseType()
     else
-      # Skip unknown keywords at top level
       this.Advance()
       return {}
     endif
@@ -799,9 +741,7 @@ export class Vim9Parser
     
     this.Expect(TOKEN_KEYWORD)  # var
     
-    # Check for destructuring: var [a, b] = list or var {x, y} = dict
     if this.current_token.type == TOKEN_SQOPEN
-      # List destructuring
       this.Advance()  # skip [
       var names: list<string> = []
       while this.current_token.type != TOKEN_SQCLOSE && this.current_token.type != TOKEN_EOF
@@ -821,7 +761,6 @@ export class Vim9Parser
       node.is_destructure = true
       node.is_list_destructure = true
     elseif this.current_token.type == TOKEN_COPEN
-      # Dict destructuring
       this.Advance()  # skip {
       var names: list<string> = []
       while this.current_token.type != TOKEN_CCLOSE && this.current_token.type != TOKEN_EOF
@@ -841,18 +780,15 @@ export class Vim9Parser
       node.is_destructure = true
       node.is_list_destructure = false
     else
-      # Regular variable declaration
       var name_tok = this.Expect(TOKEN_IDENTIFIER)
       node.name = name_tok.value
       
-      # Optional type annotation
       if this.current_token.type == TOKEN_COLON
         this.Advance()
         node.rtype = this.ParseTypeString()
       endif
     endif
     
-    # Optional initialization
     if this.current_token.type == TOKEN_EQ
       this.Advance()
       node.body->add(this.ParseExpression())
@@ -869,13 +805,11 @@ export class Vim9Parser
     var name_tok = this.Expect(TOKEN_IDENTIFIER)
     node.name = name_tok.value
     
-    # Optional type annotation
     if this.current_token.type == TOKEN_COLON
       this.Advance()
       node.rtype = this.ParseType()
     endif
     
-    # Initialization (required for const)
     if this.current_token.type == TOKEN_EQ
       this.Advance()
       node.body->add(this.ParseExpression())
@@ -892,18 +826,15 @@ export class Vim9Parser
     var name_tok = this.Expect(TOKEN_IDENTIFIER)
     node.name = name_tok.value
     
-    # Parse parameters
     this.Expect(TOKEN_POPEN)
     node.params = this.ParseParameterList()
     this.Expect(TOKEN_PCLOSE)
     
-    # Parse return type
     if this.current_token.type == TOKEN_COLON
       this.Advance()
       node.rtype = this.ParseTypeString()
     endif
     
-    # Parse body
     while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'enddef')
       if this.current_token.type == TOKEN_EOF
         throw $'Syntax error at line {this.reader.line + 1}: Unexpected EOF in def body'
@@ -924,7 +855,6 @@ export class Vim9Parser
     var name_tok = this.Expect(TOKEN_IDENTIFIER)
     node.name = name_tok.value
     
-    # Parse body (members and methods)
     while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endclass')
       if this.current_token.type == TOKEN_EOF
         throw $'Syntax error at line {this.reader.line + 1}: Unexpected EOF in class body'
@@ -949,7 +879,6 @@ export class Vim9Parser
     
     this.Expect(TOKEN_KEYWORD)  # import
     
-    # import autoload "module.vim" as m
     if this.current_token.value == 'autoload'
       this.Advance()
     endif
@@ -1004,7 +933,6 @@ export class Vim9Parser
   enddef
   
   def ParseStatement(): Node
-    # Check for control statements and declarations
     if this.current_token.type == TOKEN_KEYWORD
       if this.current_token.value == 'var'
         return this.ParseVar()
@@ -1027,7 +955,6 @@ export class Vim9Parser
       elseif this.current_token.value == 'echo'
         var echo_node = NewNode(NODE_ECHO)
         this.Advance()
-        # Parse echo arguments
         while this.current_token.type != TOKEN_KEYWORD && this.current_token.type != TOKEN_EOF
           echo_node.body->add(this.ParseExpression())
           if this.current_token.type == TOKEN_COMMA
@@ -1047,10 +974,8 @@ export class Vim9Parser
       endif
     endif
     
-    # Parse expression statement (may include assignment)
      var expr = this.ParseExpression()
      
-     # Check for assignment (regular or compound)
      if this.current_token.type == TOKEN_EQ
        this.Advance()
        var value = this.ParseExpression()
@@ -1117,11 +1042,9 @@ export class Vim9Parser
     var node = NewNode(NODE_IF)
     this.Expect(TOKEN_KEYWORD)  # 'if'
     
-    # Parse condition
     var condition = this.ParseExpression()
     node.body = [condition]
     
-    # Parse if body
     var if_body: list<dict<any>> = []
     while this.current_token.type != TOKEN_KEYWORD || 
           (this.current_token.value != 'else' && 
@@ -1134,7 +1057,6 @@ export class Vim9Parser
     endwhile
     node.body->add(if_body)
     
-    # Parse else/elseif/endif
     while this.current_token.type == TOKEN_KEYWORD && 
           (this.current_token.value == 'elseif' || this.current_token.value == 'else')
       if this.current_token.value == 'elseif'
@@ -1176,11 +1098,9 @@ export class Vim9Parser
     var node = NewNode(NODE_WHILE)
     this.Expect(TOKEN_KEYWORD)  # 'while'
     
-    # Parse condition
     var condition = this.ParseExpression()
     node.body = [condition]
     
-    # Parse body
     var body: list<dict<any>> = []
     while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endwhile')
       if this.current_token.type == TOKEN_EOF
@@ -1198,21 +1118,17 @@ export class Vim9Parser
     var node = NewNode(NODE_FOR)
     this.Expect(TOKEN_KEYWORD)  # 'for'
     
-    # Parse variable
     var var_name = this.Expect(TOKEN_IDENTIFIER).value
     node.name = var_name
     
-    # Expect 'in'
     if this.current_token.type != TOKEN_KEYWORD || this.current_token.value != 'in'
       throw $'Syntax error at line {this.reader.line + 1}, col {this.reader.col + 1}: Expected "in" keyword in for loop, got "{this.current_token.value}"'
     endif
     this.Advance()
     
-    # Parse iterable expression
     var iterable = this.ParseExpression()
     node.body = [iterable]
     
-    # Parse body
     var body: list<dict<any>> = []
     while !(this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'endfor')
       if this.current_token.type == TOKEN_EOF
@@ -1230,7 +1146,6 @@ export class Vim9Parser
     var node = NewNode(NODE_RETURN)
     this.Expect(TOKEN_KEYWORD)  # 'return'
     
-    # Return value is optional
     if this.current_token.type != TOKEN_KEYWORD
       var return_val = this.ParseExpression()
       node.body = [return_val]
@@ -1243,7 +1158,6 @@ export class Vim9Parser
     var node = NewNode(NODE_TRY)
     this.Expect(TOKEN_KEYWORD)  # 'try'
     
-    # Parse try body
     var try_body: list<dict<any>> = []
     while !(this.current_token.type == TOKEN_KEYWORD && 
             (this.current_token.value == 'catch' || this.current_token.value == 'finally' || this.current_token.value == 'endtry'))
@@ -1254,19 +1168,16 @@ export class Vim9Parser
     endwhile
     node.body = [try_body]
     
-    # Parse catch blocks
     while this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'catch'
       this.Advance()
       var catch_node = NewNode(NODE_CATCH)
       
-      # Parse exception variable (optional)
       if this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'as'
         this.Advance()
         var exc_var = this.Expect(TOKEN_IDENTIFIER)
         catch_node.name = exc_var.value
       endif
       
-      # Parse catch body
       var catch_body: list<dict<any>> = []
       while !(this.current_token.type == TOKEN_KEYWORD && 
               (this.current_token.value == 'catch' || this.current_token.value == 'finally' || this.current_token.value == 'endtry'))
@@ -1279,7 +1190,6 @@ export class Vim9Parser
       node.body->add(catch_node)
     endwhile
     
-    # Parse finally block (optional)
     if this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'finally'
       this.Advance()
       var finally_node = NewNode(NODE_FINALLY)
@@ -1312,7 +1222,6 @@ export class Vim9Parser
         param.type = this.ParseTypeString()
       endif
       
-      # Optional default value
       if this.current_token.type == TOKEN_EQ
         this.Advance()
         param.default = this.ParseExpression()
@@ -1340,7 +1249,6 @@ export class Vim9Parser
     type_str = this.current_token.value
     this.Advance()
     
-    # Handle generic types: list<string>, dict<number>, etc.
     if this.current_token.type == TOKEN_LT
       this.Advance()
       type_str ..= '<'
@@ -1572,7 +1480,6 @@ export class Vim9Parser
     
     while true
       if this.current_token.type == TOKEN_DOT || this.current_token.type == TOKEN_ARROW
-        # Member/method access: obj.field or obj->method
         this.Advance()
         if this.current_token.type != TOKEN_IDENTIFIER
           throw $'Expected identifier after . or ->, got {this.current_token.value}'
@@ -1584,11 +1491,9 @@ export class Vim9Parser
         node.name = field
         left = node
       elseif this.current_token.type == TOKEN_SQOPEN
-        # Array/string access or slice: arr[index] or str[start:end]
         this.Advance()
         var index = this.ParseExpression()
         
-        # Check for slice syntax
         if this.current_token.type == TOKEN_COLON
           this.Advance()
           var end_index: dict<any> = {}
@@ -1609,7 +1514,6 @@ export class Vim9Parser
           left = node
         endif
       elseif this.current_token.type == TOKEN_POPEN
-        # Function call: func(args)
         this.Advance()
         var args: list<dict<any>> = []
         
@@ -1636,6 +1540,18 @@ export class Vim9Parser
   enddef
   
   def ParsePrimary(): Node
+    if this.current_token.type == TOKEN_SHARP
+      while this.reader.col < len(this.reader.current_line)
+        this.reader.Advance()
+      endwhile
+      if this.reader.NextLine()
+        this.current_token = this.tokenizer.Get()
+        this.next_token = this.tokenizer.Get()
+      else
+        return NewNode(NODE_EOF)
+      endif
+    endif
+    
     if this.current_token.type == TOKEN_NUMBER
       var node = NewNode(NODE_NUMBER)
       node.value = this.current_token.value
@@ -1664,28 +1580,22 @@ export class Vim9Parser
       this.Advance()
       return node
     elseif this.current_token.type == TOKEN_POPEN
-      # Parenthesized expression or lambda: (x) or (x) => x + 1
       var saved_line = this.reader.line
       var saved_col = this.reader.col
       
       this.Advance()
       
-      # Try to parse as lambda
       var is_lambda = false
       var params: list<string> = []
       
-      # Check for lambda parameters
       if this.current_token.type == TOKEN_PCLOSE
-        # Empty parameter list: () => ...
         is_lambda = true
         this.Advance()
       elseif this.current_token.type == TOKEN_IDENTIFIER
-        # Could be (x) => or (expr)
         var first_id = this.current_token.value
         this.Advance()
         
         if this.current_token.type == TOKEN_COMMA || this.current_token.type == TOKEN_PCLOSE
-          # Lambda parameter list
           is_lambda = true
           params->add(first_id)
           
@@ -1699,13 +1609,11 @@ export class Vim9Parser
           
           this.Expect(TOKEN_PCLOSE)
         else
-          # Not a lambda, restore and parse as expression
           is_lambda = false
         endif
       endif
       
       if is_lambda && this.current_token.type == TOKEN_ARROW
-        # Lambda expression: (x, y) => x + y
         this.Advance()
         var body_expr = this.ParseExpression()
         var node = NewNode(NODE_LAMBDA)
@@ -1713,7 +1621,6 @@ export class Vim9Parser
         node.body = [body_expr]
         return node
       else
-        # Regular parenthesized expression - need to reparse
         this.reader.SetPos(saved_line, saved_col)
         this.Advance()  # Skip (
         this.Advance()  # Reload token
@@ -1722,43 +1629,35 @@ export class Vim9Parser
         return expr
       endif
     elseif this.current_token.type == TOKEN_SQOPEN
-      # List literal or comprehension: [1, 2, 3] or [for i in range(10): i * i]
       this.Advance()
       
-      # Check for list comprehension: [for i in iterable: expr] or [for i in iterable if cond: expr]
       if this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'for'
         this.Advance()
         
-        # Parse loop variable
         if this.current_token.type != TOKEN_IDENTIFIER
           throw $'Expected identifier after for in list comprehension'
         endif
         var loop_var = this.current_token.value
         this.Advance()
         
-        # Expect 'in'
         if this.current_token.type != TOKEN_KEYWORD || this.current_token.value != 'in'
           throw $'Expected "in" keyword in list comprehension'
         endif
         this.Advance()
         
-        # Parse iterable
         var iterable = this.ParseExpression()
         
-        # Optional filter condition: if cond
         var filter_expr = {}
         if this.current_token.type == TOKEN_KEYWORD && this.current_token.value == 'if'
           this.Advance()
           filter_expr = this.ParseExpression()
         endif
         
-        # Expect ':'
         if this.current_token.type != TOKEN_COLON
           throw $'Expected ":" in list comprehension'
         endif
         this.Advance()
         
-        # Parse expression to generate
         var expr = this.ParseExpression()
         
         this.Expect(TOKEN_SQCLOSE)
@@ -1771,7 +1670,6 @@ export class Vim9Parser
         node.expr = expr
         return node
       else
-        # Regular list literal
         var elements: list<dict<any>> = []
         
         while this.current_token.type != TOKEN_SQCLOSE && this.current_token.type != TOKEN_EOF
@@ -1789,7 +1687,6 @@ export class Vim9Parser
         return node
       endif
     elseif this.current_token.type == TOKEN_COPEN
-      # Dict literal: {key: value}
       this.Advance()
       var pairs: list<any> = []
       
@@ -1817,7 +1714,6 @@ export class Vim9Parser
   enddef
 endclass
 
-# Compiler class
 export class Compiler
   def new()
   enddef
@@ -1926,7 +1822,6 @@ export class Compiler
         this.CompileNode(expr, depth + 1, result)
       endfor
     elseif node.type >= 300
-      # Expression nodes
       if node.type == NODE_LAMBDA
         var params_str = join(node.params, ', ')
         result->add($'{indent}(LAMBDA ({params_str}))')
@@ -2022,9 +1917,7 @@ export class Compiler
   enddef
 endclass
 
-# Public interface - Return global scope
 export def Import(): dict<any>
-  # Return dict with class references and constants for testing
   return {
     StringReader: StringReader,
     Vim9Parser: Vim9Parser,

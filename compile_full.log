@@ -1,0 +1,7 @@
+Starting full compilation of vim9parser.vim...
+Imported parser
+Read 2148 lines from autoload/vim9parser.vim
+Created reader
+Created parser
+ERROR: Syntax error at line 161, col 12: Expected POPEN, got IDENTIFIER (new)
+THROWPOINT: command line..script /home/mattn/.vim/plugged/vim-vim9parser/compile_full.vim[25]..function <SNR>2_Vim9Parser.Parse[19]..<SNR>2_Vim9Parser.ParseTopLevelStatement[21]..<SNR>2_Vim9Parser.ParseClass[17]..<SNR>2_Vim9Parser.ParseDef[9]..<SNR>2_Vim9Parser.Expect, line 15

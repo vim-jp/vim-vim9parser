@@ -11,11 +11,8 @@ var lines = readfile(input_file)
 var header = [
   '// Generated JavaScript from Vim9 Script',
   '// Source: ' .. input_file,
-  '// Note: This is a partial compilation due to parsing errors',
   '',
   '"use strict";',
-  '',
-  '// Parser encountered errors, but generating partial output',
   '',
 ]
 
@@ -30,19 +27,10 @@ try
   var compiler = jsc.JSCompiler.new()
   js_lines = compiler.Compile(ast)
   
-catch /Syntax error/
-  # Parser failed, output what we can
-  js_lines->add('// ERROR: Parser encountered syntax errors during compilation')
-  js_lines->add('// ' .. v:exception)
-  
-catch /Unexpected token/
-  # Token error, output what we can
-  js_lines->add('// ERROR: Unexpected token during parsing')
-  js_lines->add('// ' .. v:exception)
-  
 catch
-  # Generic error, still output something
-  js_lines->add('// ERROR: ' .. v:exception)
+  println('Error: ' .. v:exception)
+  println('Throwpoint: ' .. v:throwpoint)
+  quit 1
 endtry
 
 var footer = [
@@ -55,5 +43,13 @@ var footer = [
   '}',
 ]
 
-writefile(header + js_lines + footer, output_file)
-echo 'Output written to ' .. output_file .. ' (' .. len(js_lines) .. ' lines of code)'
+try
+  writefile(header + js_lines + footer, output_file)
+  echo 'Output written to ' .. output_file .. ' (' .. len(js_lines) .. ' lines of code)'
+catch
+  # Fallback to stdout if writefile fails
+  for line in header + js_lines + footer
+    println(line)
+  endfor
+endtry
+quit 0
