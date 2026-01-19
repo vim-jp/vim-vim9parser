@@ -234,6 +234,15 @@ export class StringReader
     var max_iterations = 10000
     
     while !this.IsEof() && iterations < max_iterations
+      # Check if at beginning of line and it's a comment
+      if this.col == 0 && this.current_line[0 : 0] == '#'
+        # Skip this comment line
+        if !this.NextLine()
+          break
+        endif
+        continue
+      endif
+      
       var c = this.Peek()
       if c =~ '[ \t]'
         this.Advance()
@@ -332,15 +341,6 @@ export class Vim9Tokenizer
       endif
     endwhile
     
-    # Skip comments
-    while this.reader.Peek() == '#'
-      # Skip rest of line
-      this.reader.col = len(this.reader.current_line)
-      if !this.reader.NextLine()
-        return this.Token(TOKEN_EOF, '<EOF>', this.reader.line, this.reader.col)
-      endif
-    endwhile
-    
     this.reader.SkipWhitespace()
     
     if this.reader.IsEof()
@@ -381,12 +381,21 @@ export class Vim9Tokenizer
     
     # Multi-character operators
     var cc = this.reader.Peekn(2)
-    if cc == '=>'
+    if cc == '->'
+      this.reader.Advance(2)
+      return this.Token(TOKEN_ARROW, '->', line, col)
+    elseif cc == '=>'
       this.reader.Advance(2)
       return this.Token(TOKEN_ARROW, '=>', line, col)
+    elseif cc == '=~'
+      this.reader.Advance(2)
+      return this.Token(TOKEN_EQEQ, '=~', line, col)
     elseif cc == '=='
       this.reader.Advance(2)
       return this.Token(TOKEN_EQEQ, '==', line, col)
+    elseif cc == '!~'
+      this.reader.Advance(2)
+      return this.Token(TOKEN_NEQ, '!~', line, col)
     elseif cc == '!='
       this.reader.Advance(2)
       return this.Token(TOKEN_NEQ, '!=', line, col)
@@ -825,7 +834,7 @@ export class Vim9Parser
       # Optional type annotation
       if this.current_token.type == TOKEN_COLON
         this.Advance()
-        node.rtype = this.ParseType()
+        node.rtype = this.ParseTypeString()
       endif
     endif
     
@@ -1286,7 +1295,13 @@ export class Vim9Parser
       
       if this.current_token.type == TOKEN_COLON
         this.Advance()
-        param.type = this.ParseType()
+        param.type = this.ParseTypeString()
+      endif
+      
+      # Optional default value
+      if this.current_token.type == TOKEN_EQ
+        this.Advance()
+        param.default = this.ParseExpression()
       endif
       
       params->add(param)
@@ -1542,11 +1557,11 @@ export class Vim9Parser
     var left = this.ParsePrimary()
     
     while true
-      if this.current_token.type == TOKEN_DOT
-        # Member access: obj.field
+      if this.current_token.type == TOKEN_DOT || this.current_token.type == TOKEN_ARROW
+        # Member/method access: obj.field or obj->method
         this.Advance()
         if this.current_token.type != TOKEN_IDENTIFIER
-          throw $'Expected identifier after ., got {this.current_token.value}'
+          throw $'Expected identifier after . or ->, got {this.current_token.value}'
         endif
         var field = this.current_token.value
         this.Advance()
@@ -1555,14 +1570,30 @@ export class Vim9Parser
         node.name = field
         left = node
       elseif this.current_token.type == TOKEN_SQOPEN
-        # Array access: arr[index]
+        # Array/string access or slice: arr[index] or str[start:end]
         this.Advance()
         var index = this.ParseExpression()
-        this.Expect(TOKEN_SQCLOSE)
-        var node = NewNode(NODE_SUBSCRIPT)
-        node.left = left
-        node.right = index
-        left = node
+        
+        # Check for slice syntax
+        if this.current_token.type == TOKEN_COLON
+          this.Advance()
+          var end_index: dict<any> = {}
+          if this.current_token.type != TOKEN_SQCLOSE
+            end_index = this.ParseExpression()
+          endif
+          this.Expect(TOKEN_SQCLOSE)
+          var node = NewNode(NODE_SUBSCRIPT)
+          node.left = left
+          node.right = index
+          node.body = [end_index]  # Store end index in body field for slices
+          left = node
+        else
+          this.Expect(TOKEN_SQCLOSE)
+          var node = NewNode(NODE_SUBSCRIPT)
+          node.left = left
+          node.right = index
+          left = node
+        endif
       elseif this.current_token.type == TOKEN_POPEN
         # Function call: func(args)
         this.Advance()
