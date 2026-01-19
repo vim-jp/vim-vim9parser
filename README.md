@@ -1,18 +1,38 @@
 # Vim9 Script Parser
 
-Vim9script language parser that generates AST (Abstract Syntax Tree).
+A high-performance parser for Vim9script that generates Abstract Syntax Trees (AST).
 
-Compatible with vim-vimlparser for unified interface.
+## Project Goal
 
-## Features
+Enable **Vim9script support in [vim-language-server](https://github.com/iamcco/vim-language-server)** by providing:
 
-- Parse vim9script syntax including type annotations, classes, etc.
-- Generate AST compatible with vim-vimlparser
-- Support for vim9script specific features
+1. **Accurate Vim9 syntax parsing** - Complete AST generation for all vim9script constructs
+2. **Language Server integration** - Symbol tables and completion support for LSP clients
+3. **Cooperative parsing** - Work alongside [vim-vimlparser](https://github.com/vim-jp/vim-vimlparser) in a dispatcher pattern for hybrid VimL/Vim9 files
+
+### Vision: LSP Completion Flow
+
+```
+vim-language-server
+    ↓
+Detect language (vim9script vs legacy VimL)
+    ↓
+┌─────────────────────┬──────────────────────┐
+├─ Legacy VimL ──────→ vim-vimlparser       │
+└─ Vim9script ───────→ vim-vim9parser       │
+                      (this project)         │
+                      ↓                      │
+                      AST generation        │
+                      ↓                      │
+                      Symbol Table          │
+                      ↓                      │
+                      Completion candidates │
+└─────────────────────┴──────────────────────┘
+```
 
 ## Supported Languages
 
-- Vim9script (VimL with `:vim9script` declaration)
+- **Vim9script** - Modern Vim scripting language (with `:vim9script` declaration)
 
 ## Usage
 
@@ -146,34 +166,66 @@ def MyFunc(): void
 enddef
 ```
 
-### Semantic Features (Not Implemented)
+### Semantic Features (Critical for LSP)
 
+- **Symbol Table**: ⚠️ **MISSING** - No tracking of defined functions/variables/classes (REQUIRED FOR COMPLETION)
+- **Scope Resolution**: Not tracked - Variable/function scoping is not analyzed
 - **Type Checking**: Type annotations are parsed but not validated
-- **Scope Resolution**: Variable scoping is not tracked
-- **Symbol Table**: No tracking of defined functions/variables/classes
 - **Undefined Reference Detection**: References to undefined symbols are not flagged
 
-### Error Handling Limitations
+### Parsing Limitations
 
-- **Limited Error Messages**: Errors may not always indicate what was expected
-- **No Warnings**: No detection of unused variables, unreachable code, etc.
+- **Incremental Parsing**: Not supported - full file re-parse on every change
+- **Hybrid Files**: Limited support for files that mix legacy VimL and vim9script
+- **Error Handling**: Limited error messages; parser stops at first syntax error
 
-### Future Enhancements
+### Future Work (Prioritized for LSP Goal)
 
-1. **High Priority**
-   - Extended test coverage
+#### Phase 1: LSP Foundation (CRITICAL)
+1. **Symbol Table Implementation** ⚠️ **HIGHEST PRIORITY**
+   - Track function definitions (name, parameters, return type, line number)
+   - Track variable declarations (name, type, scope, initialization)
+   - Track class/import definitions
+   - Support for scoped symbols (local, script-level, global)
+   - **Why**: LSP completion requires knowing what symbols are available at cursor position
 
-2. **Medium Priority**
-   - Dict comprehensions: `{for k in list: k: value}`
-   - Full enum support with proper semantics
-   - Type aliases: `type MyList = list<string>`
+2. **Scope Analysis**
+   - Function-local scope vs script-level scope
+   - Parameter binding in function context
+   - Closure support for nested functions
+   - **Why**: Avoid suggesting symbols from wrong scope
 
-3. **Low Priority**
-   - Type checking system
-   - Interface support
-   - Language Server Protocol (LSP) integration
-   - Code formatter based on AST
-   - Scope resolution and symbol tracking
+3. **Public LSP Interface**
+   - Standardized API for vim-language-server integration
+   - Return format compatible with LSP (SymbolInformation, CompletionItem)
+   - Position-to-symbol lookup capability
+   - **Why**: LSP clients need consistent interface
+
+4. **Test Coverage for LSP Scenarios**
+   - Completion in function bodies
+   - Completion with imported symbols
+   - Hover information for variables/functions
+   - Go-to-definition support
+   - **Why**: Verify LSP integration works end-to-end
+
+#### Phase 2: Advanced Features
+- Incremental parsing support for large files
+- Hybrid file support (VimL + Vim9 in same file)
+- Dict comprehensions: `{for k in list: k: value}`
+- Full enum support with proper semantics
+- Type aliases: `type MyList = list<string>`
+
+#### Phase 3: Quality & Performance
+- Extended test coverage
+- Performance optimization for large files
+- Better error messages and error recovery
+- Code formatter based on AST
+
+#### Phase 4: Optional Enhancements
+- Type checking system
+- Interface support
+- Language Server Protocol reference implementation
+- JavaScript compilation to production-grade code
 
 ## Contributing
 
@@ -183,8 +235,61 @@ Contributions are welcome! Please feel free to submit pull requests for:
 - Test cases
 - Documentation improvements
 
-## Relation to vim-vimlparser
+## Architecture & Integration
 
-This parser is designed to be used alongside vim-vimlparser. It handles vim9script syntax while vim-vimlparser handles legacy VimL.
+### Cooperative Parsing with vim-vimlparser
 
-For projects supporting both, consider using a dispatcher that checks the script header and selects the appropriate parser.
+This parser is designed to work **alongside** vim-vimlparser in a dispatcher pattern:
+
+```
+┌─────────────────────────────────────┐
+│  vim-language-server (dispatcher)   │
+└────────────┬────────────────────────┘
+             │
+             ├─ Detect file type
+             │
+    ┌────────┴───────┐
+    │                │
+    v                v
+vim9script      Legacy VimL
+    │                │
+    v                v
+vim-vim9parser  vim-vimlparser
+    │                │
+    v                v
+vim9 AST       VimL AST
+    │                │
+    └────────┬───────┘
+             v
+    Language Service Features
+    (Completion, Hover, Go-to-def, etc.)
+```
+
+### Implementation Strategy
+
+1. **Detection**: Check for `:vim9script` at file start or in first few lines
+2. **Delegation**: Route to appropriate parser
+3. **Symbol Integration**: Merge symbol tables from both parsers
+4. **Unified LSP**: Return consistent LSP responses regardless of source language
+
+### Current Status by Component
+
+| Component | Status | Notes |
+|-----------|--------|-------|
+| Vim9 Parsing | ✅ Complete | All major syntax supported |
+| vim9 AST | ✅ Complete | Node types defined |
+| Symbol Table | ❌ **MISSING** | CRITICAL for LSP |
+| Scope Analysis | ❌ **MISSING** | CRITICAL for Completion |
+| LSP Interface | ❌ **MISSING** | Needs standardization |
+| vim-vimlparser integration | 🚀 Pending | Requires dispatcher in vim-language-server |
+
+## Testing
+
+The parser includes comprehensive test coverage:
+
+- **Syntax parsing tests** - All major vim9script constructs
+- **Expression tests** - Operators, precedence, types
+- **Feature tests** - Line continuation, comprehensions, destructuring, etc.
+- **Compiler tests** - JavaScript code generation
+
+Run all tests: `make test`
