@@ -690,11 +690,511 @@ class Vim9Parser {
   }
 
   parseStatement() {
+    if (this.current_token.type === TOKEN_KEYWORD) {
+      if (this.current_token.value === 'if') {
+        return this.parseIf();
+      } else if (this.current_token.value === 'while') {
+        return this.parseWhile();
+      } else if (this.current_token.value === 'for') {
+        return this.parseFor();
+      } else if (this.current_token.value === 'return') {
+        return this.parseReturn();
+      } else if (this.current_token.value === 'try') {
+        return this.parseTry();
+      } else if (this.current_token.value === 'throw') {
+        return this.parseThrow();
+      }
+    }
     return { type: 0, body: [] };
   }
 
+  parseIf() {
+    const node = {
+      type: 13, // NODE_IF
+      body: [],
+      line: this.current_token.line,
+      col: this.current_token.col,
+    };
+    
+    this.expect(TOKEN_KEYWORD); // if
+    const condition = this.parseExpression();
+    node.body.push(condition);
+    
+    const thenBody = [];
+    while (!(this.current_token.type === TOKEN_KEYWORD && 
+             (this.current_token.value === 'elseif' || 
+              this.current_token.value === 'else' || 
+              this.current_token.value === 'endif'))) {
+      if (this.current_token.type === TOKEN_EOF) break;
+      thenBody.push(this.parseStatement());
+    }
+    node.body.push(thenBody);
+    
+    while (this.current_token.type === TOKEN_KEYWORD && this.current_token.value === 'elseif') {
+      this.advance();
+      const elseifCondition = this.parseExpression();
+      const elseifBody = [];
+      while (!(this.current_token.type === TOKEN_KEYWORD && 
+               (this.current_token.value === 'elseif' || 
+                this.current_token.value === 'else' || 
+                this.current_token.value === 'endif'))) {
+        if (this.current_token.type === TOKEN_EOF) break;
+        elseifBody.push(this.parseStatement());
+      }
+      node.body.push(elseifCondition);
+      node.body.push(elseifBody);
+    }
+    
+    if (this.current_token.type === TOKEN_KEYWORD && this.current_token.value === 'else') {
+      this.advance();
+      const elseBody = [];
+      while (!(this.current_token.type === TOKEN_KEYWORD && this.current_token.value === 'endif')) {
+        if (this.current_token.type === TOKEN_EOF) break;
+        elseBody.push(this.parseStatement());
+      }
+      node.body.push(elseBody);
+    }
+    
+    this.expect(TOKEN_KEYWORD); // endif
+    return node;
+  }
+
+  parseWhile() {
+    const node = {
+      type: 17, // NODE_WHILE
+      body: [],
+      line: this.current_token.line,
+      col: this.current_token.col,
+    };
+    
+    this.expect(TOKEN_KEYWORD); // while
+    const condition = this.parseExpression();
+    node.body.push(condition);
+    
+    const whileBody = [];
+    while (!(this.current_token.type === TOKEN_KEYWORD && this.current_token.value === 'endwhile')) {
+      if (this.current_token.type === TOKEN_EOF) break;
+      whileBody.push(this.parseStatement());
+    }
+    node.body.push(whileBody);
+    
+    this.expect(TOKEN_KEYWORD); // endwhile
+    return node;
+  }
+
+  parseFor() {
+    const node = {
+      type: 19, // NODE_FOR
+      name: '',
+      body: [],
+      line: this.current_token.line,
+      col: this.current_token.col,
+    };
+    
+    this.expect(TOKEN_KEYWORD); // for
+    const varTok = this.expect(TOKEN_IDENTIFIER);
+    node.name = varTok.value;
+    
+    this.expect(TOKEN_KEYWORD); // in
+    const iterable = this.parseExpression();
+    node.body.push(iterable);
+    
+    const forBody = [];
+    while (!(this.current_token.type === TOKEN_KEYWORD && this.current_token.value === 'endfor')) {
+      if (this.current_token.type === TOKEN_EOF) break;
+      forBody.push(this.parseStatement());
+    }
+    node.body.push(forBody);
+    
+    this.expect(TOKEN_KEYWORD); // endfor
+    return node;
+  }
+
+  parseReturn() {
+    const node = {
+      type: 7, // NODE_RETURN
+      body: [],
+      line: this.current_token.line,
+      col: this.current_token.col,
+    };
+    
+    this.expect(TOKEN_KEYWORD); // return
+    if (this.current_token.type !== TOKEN_KEYWORD && this.current_token.type !== TOKEN_EOF) {
+      node.body.push(this.parseExpression());
+    }
+    
+    return node;
+  }
+
+  parseTry() {
+    const node = {
+      type: 23, // NODE_TRY
+      body: [],
+      line: this.current_token.line,
+      col: this.current_token.col,
+    };
+    
+    this.expect(TOKEN_KEYWORD); // try
+    
+    const tryBody = [];
+    while (!(this.current_token.type === TOKEN_KEYWORD && 
+             (this.current_token.value === 'catch' || this.current_token.value === 'endtry'))) {
+      if (this.current_token.type === TOKEN_EOF) break;
+      tryBody.push(this.parseStatement());
+    }
+    node.body.push(tryBody);
+    
+    if (this.current_token.type === TOKEN_KEYWORD && this.current_token.value === 'catch') {
+      this.advance();
+      const catchBody = [];
+      while (!(this.current_token.type === TOKEN_KEYWORD && this.current_token.value === 'endtry')) {
+        if (this.current_token.type === TOKEN_EOF) break;
+        catchBody.push(this.parseStatement());
+      }
+      node.body.push(catchBody);
+    }
+    
+    this.expect(TOKEN_KEYWORD); // endtry
+    return node;
+  }
+
+  parseThrow() {
+    const node = {
+      type: 27, // NODE_THROW
+      body: [],
+      line: this.current_token.line,
+      col: this.current_token.col,
+    };
+    
+    this.expect(TOKEN_KEYWORD); // throw
+    node.body.push(this.parseExpression());
+    
+    return node;
+  }
+
   parseExpression() {
-    return { type: 0, value: '' };
+    return this.parseTernary();
+  }
+
+  parseTernary() {
+    let condition = this.parseLogicalOr();
+    
+    if (this.current_token.type === TOKEN_QUESTION) {
+      this.advance();
+      const trueExpr = this.parseExpression();
+      this.expect(TOKEN_COLON);
+      const falseExpr = this.parseExpression();
+      const node = {
+        type: 34, // NODE_TERNARY
+        body: [condition, trueExpr, falseExpr],
+      };
+      return node;
+    }
+    
+    return condition;
+  }
+
+  parseLogicalOr() {
+    let left = this.parseLogicalAnd();
+    
+    while (this.current_token.type === TOKEN_OR) {
+      this.advance();
+      const right = this.parseLogicalAnd();
+      left = {
+        type: 35, // NODE_OR
+        left,
+        right,
+      };
+    }
+    
+    return left;
+  }
+
+  parseLogicalAnd() {
+    let left = this.parseBitwiseOr();
+    
+    while (this.current_token.type === TOKEN_AND) {
+      this.advance();
+      const right = this.parseBitwiseOr();
+      left = {
+        type: 36, // NODE_AND
+        left,
+        right,
+      };
+    }
+    
+    return left;
+  }
+
+  parseBitwiseOr() {
+    let left = this.parseBitwiseXor();
+    
+    while (this.current_token.type === TOKEN_PIPE) {
+      this.advance();
+      const right = this.parseBitwiseXor();
+      left = {
+        type: 318, // NODE_BIT_OR
+        left,
+        right,
+      };
+    }
+    
+    return left;
+  }
+
+  parseBitwiseXor() {
+    let left = this.parseBitwiseAnd();
+    
+    while (this.current_token.type === TOKEN_CARET) {
+      this.advance();
+      const right = this.parseBitwiseAnd();
+      left = {
+        type: 319, // NODE_BIT_XOR
+        left,
+        right,
+      };
+    }
+    
+    return left;
+  }
+
+  parseBitwiseAnd() {
+    let left = this.parseComparison();
+    
+    while (this.current_token.type === TOKEN_AMPERSAND) {
+      this.advance();
+      const right = this.parseComparison();
+      left = {
+        type: 320, // NODE_BIT_AND
+        left,
+        right,
+      };
+    }
+    
+    return left;
+  }
+
+  parseComparison() {
+    let left = this.parseShift();
+    
+    while (this.current_token.type === TOKEN_EQEQ || 
+           this.current_token.type === TOKEN_NEQ ||
+           this.current_token.type === TOKEN_LT ||
+           this.current_token.type === TOKEN_LTEQ ||
+           this.current_token.type === TOKEN_GT ||
+           this.current_token.type === TOKEN_GTEQ) {
+      const op = this.current_token.type;
+      this.advance();
+      const right = this.parseShift();
+      const nodeType = op === TOKEN_EQEQ ? 37 : op === TOKEN_NEQ ? 38 : 
+                       op === TOKEN_LT ? 41 : op === TOKEN_LTEQ ? 42 :
+                       op === TOKEN_GT ? 39 : 40; // NODE_EQUAL, NEQ, SMALLER, SEQUAL, GREATER, GEQUAL
+      left = {
+        type: nodeType,
+        left,
+        right,
+      };
+    }
+    
+    return left;
+  }
+
+  parseShift() {
+    let left = this.parseAdditive();
+    
+    while (this.current_token.type === TOKEN_LSHIFT || this.current_token.type === TOKEN_RSHIFT) {
+      const op = this.current_token.type;
+      this.advance();
+      const right = this.parseAdditive();
+      const nodeType = op === TOKEN_LSHIFT ? 321 : 322; // NODE_LSHIFT, RSHIFT
+      left = {
+        type: nodeType,
+        left,
+        right,
+      };
+    }
+    
+    return left;
+  }
+
+  parseAdditive() {
+    let left = this.parseMultiplicative();
+    
+    while (this.current_token.type === TOKEN_PLUS || this.current_token.type === TOKEN_MINUS) {
+      const op = this.current_token.type;
+      this.advance();
+      const right = this.parseMultiplicative();
+      const nodeType = op === TOKEN_PLUS ? 300 : 301; // NODE_ADD, SUBTRACT
+      left = {
+        type: nodeType,
+        left,
+        right,
+      };
+    }
+    
+    return left;
+  }
+
+  parseMultiplicative() {
+    let left = this.parseUnary();
+    
+    while (this.current_token.type === TOKEN_STAR || 
+           this.current_token.type === TOKEN_SLASH ||
+           this.current_token.type === TOKEN_PERCENT) {
+      const op = this.current_token.type;
+      this.advance();
+      const right = this.parseUnary();
+      const nodeType = op === TOKEN_STAR ? 302 : op === TOKEN_SLASH ? 303 : 304; // NODE_MULTIPLY, DIVIDE, MODULO
+      left = {
+        type: nodeType,
+        left,
+        right,
+      };
+    }
+    
+    return left;
+  }
+
+  parseUnary() {
+    if (this.current_token.type === TOKEN_NOT) {
+      this.advance();
+      const operand = this.parseUnary();
+      return {
+        type: 316, // NODE_NOT
+        left: operand,
+      };
+    } else if (this.current_token.type === TOKEN_MINUS) {
+      this.advance();
+      const operand = this.parseUnary();
+      return {
+        type: 301, // NODE_SUBTRACT (unary)
+        left: operand,
+      };
+    }
+    
+    return this.parsePostfix();
+  }
+
+  parsePostfix() {
+    let left = this.parsePrimary();
+    
+    while (true) {
+      if (this.current_token.type === TOKEN_DOT || this.current_token.type === TOKEN_ARROW) {
+        this.advance();
+        const field = this.expect(TOKEN_IDENTIFIER).value;
+        left = {
+          type: 314, // NODE_DOT
+          left,
+          name: field,
+        };
+      } else if (this.current_token.type === TOKEN_SQOPEN) {
+        this.advance();
+        const index = this.parseExpression();
+        this.expect(TOKEN_SQCLOSE);
+        left = {
+          type: 315, // NODE_SUBSCRIPT
+          left,
+          right: index,
+        };
+      } else if (this.current_token.type === TOKEN_POPEN) {
+        this.advance();
+        const args = [];
+        while (this.current_token.type !== TOKEN_PCLOSE && this.current_token.type !== TOKEN_EOF) {
+          args.push(this.parseExpression());
+          if (this.current_token.type === TOKEN_COMMA) {
+            this.advance();
+          } else {
+            break;
+          }
+        }
+        this.expect(TOKEN_PCLOSE);
+        left = {
+          type: 313, // NODE_CALL
+          left,
+          body: args,
+        };
+      } else {
+        break;
+      }
+    }
+    
+    return left;
+  }
+
+  parsePrimary() {
+    if (this.current_token.type === TOKEN_NUMBER) {
+      const node = {
+        type: 305, // NODE_NUMBER
+        value: this.current_token.value,
+      };
+      this.advance();
+      return node;
+    } else if (this.current_token.type === TOKEN_STRING) {
+      const node = {
+        type: 306, // NODE_STRING
+        value: this.current_token.value,
+      };
+      this.advance();
+      return node;
+    } else if (this.current_token.type === TOKEN_IDENTIFIER) {
+      const node = {
+        type: 307, // NODE_IDENTIFIER
+        name: this.current_token.value,
+      };
+      this.advance();
+      return node;
+    } else if (this.current_token.value === 'true') {
+      this.advance();
+      return { type: 308 }; // NODE_TRUE
+    } else if (this.current_token.value === 'false') {
+      this.advance();
+      return { type: 309 }; // NODE_FALSE
+    } else if (this.current_token.value === 'null') {
+      this.advance();
+      return { type: 310 }; // NODE_NULL
+    } else if (this.current_token.type === TOKEN_POPEN) {
+      this.advance();
+      const expr = this.parseExpression();
+      this.expect(TOKEN_PCLOSE);
+      return expr;
+    } else if (this.current_token.type === TOKEN_SQOPEN) {
+      this.advance();
+      const elements = [];
+      while (this.current_token.type !== TOKEN_SQCLOSE && this.current_token.type !== TOKEN_EOF) {
+        elements.push(this.parseExpression());
+        if (this.current_token.type === TOKEN_COMMA) {
+          this.advance();
+        } else {
+          break;
+        }
+      }
+      this.expect(TOKEN_SQCLOSE);
+      return {
+        type: 311, // NODE_LIST
+        body: elements,
+      };
+    } else if (this.current_token.type === TOKEN_COPEN) {
+      this.advance();
+      const pairs = [];
+      while (this.current_token.type !== TOKEN_CCLOSE && this.current_token.type !== TOKEN_EOF) {
+        const key = this.expect(TOKEN_IDENTIFIER).value;
+        this.expect(TOKEN_COLON);
+        const value = this.parseExpression();
+        pairs.push({ key, value });
+        if (this.current_token.type === TOKEN_COMMA) {
+          this.advance();
+        } else {
+          break;
+        }
+      }
+      this.expect(TOKEN_CCLOSE);
+      return {
+        type: 312, // NODE_DICT
+        body: pairs,
+      };
+    }
+    
+    throw new Error(`Unexpected token: ${this.current_token.value}`);
   }
 
   parseTypeString() {
