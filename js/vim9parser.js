@@ -1081,7 +1081,12 @@ class Vim9Parser {
     while (true) {
       if (this.current_token.type === TOKEN_DOT || this.current_token.type === TOKEN_ARROW) {
         this.advance();
-        const field = this.expect(TOKEN_IDENTIFIER).value;
+        // Accept both IDENTIFIER and KEYWORD as field names (e.g., obj.type)
+        if (this.current_token.type !== TOKEN_IDENTIFIER && this.current_token.type !== TOKEN_KEYWORD) {
+          throw new Error(`Expected identifier after . or ->, got ${this.current_token.value}`);
+        }
+        const field = this.current_token.value;
+        this.advance();
         left = {
           type: 314, // NODE_DOT
           left,
@@ -1130,9 +1135,12 @@ class Vim9Parser {
       this.advance();
       return node;
     } else if (this.current_token.type === TOKEN_STRING) {
+      // Handle string interpolation if present
+      let value = this.current_token.value;
+      const type = this.current_token.value.includes('{') ? 263 : 306; // NODE_ISTRING or NODE_STRING
       const node = {
-        type: 306, // NODE_STRING
-        value: this.current_token.value,
+        type: type,
+        value: value,
       };
       this.advance();
       return node;
