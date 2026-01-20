@@ -1,3 +1,0 @@
-Parse failed:
-Error: Syntax error at line 161: Unexpected EOF in def body
-Throwpoint: command line..script /home/mattn/.vim/plugged/vim-vim9parser/test_parse_only.vim[10]..function <SNR>2_Vim9Parser.Parse[19]..<SNR>2_Vim9Parser.ParseTopLevelStatement[25]..<SNR>2_Vim9Parser.ParseExport[12]..<SNR>2_Vim9Parser.ParseClass[17]..<SNR>2_Vim9Parser.ParseDef, line 22
